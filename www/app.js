@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.7.0';
+  var APP_VERSION = '2.8.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -551,7 +551,7 @@
       '<div class="ubox">' +
       (q && q.files && q.files.some(function (f) { return f.kind === 'image'; })
         ? '<div class="uatt">' + q.files.filter(function (f) { return f.kind === 'image'; }).map(function (f) {
-          return '<img src="data:image/jpeg;base64,' + f.data + '" alt="">';
+          return '<img src="data:image/jpeg;base64,' + f.data + '" data-full="data:image/jpeg;base64,' + f.data + '" alt="">';
         }).join('') + '</div>' : '') +
       (q && q.files && q.files.some(function (f) { return f.kind !== 'image'; })
         ? '<div class="ufiles">' + q.files.filter(function (f) { return f.kind !== 'image'; }).map(function (f) {
@@ -1682,6 +1682,16 @@
     setTimeout(function () { $('input').focus(); }, 60);
   }
 
+  function openLightbox(src) {
+    if (!src) return;
+    $('lightboxImg').src = src;
+    $('lightbox').classList.add('show');
+  }
+  function closeLightbox() {
+    $('lightbox').classList.remove('show');
+    setTimeout(function () { $('lightboxImg').src = ''; }, 200);
+  }
+
   function copyText(txt) {
     if (!txt) { toast('没有可复制的内容'); return; }
     if (window.App && window.App.copy) { window.App.copy(txt); toast('已复制'); return; }
@@ -1785,6 +1795,8 @@
     });
 
     $('messages').addEventListener('click', function (e) {
+      var img = e.target.closest('img[data-full]');
+      if (img) { openLightbox(img.getAttribute('data-full')); return; }
       var t = e.target.closest('[data-act]');
       if (!t) return;
       var act = t.getAttribute('data-act');
@@ -1986,6 +1998,7 @@
       rail.addEventListener('pointercancel', function () { dragging = false; rail.classList.remove('active'); });
     })();
 
+    $('lightbox').onclick = closeLightbox;
     $('qpanelClose').onclick = closeQPanel;
     $('qpanelList').addEventListener('click', function (e) {
       var item = e.target.closest('.qitem');
@@ -2001,6 +2014,7 @@
 
     window.__onBack = function () {
       if ($('agreeSheet').classList.contains('open')) { return true; }
+      if ($('lightbox').classList.contains('show')) { closeLightbox(); return true; }
       if (qpanelOpen) { closeQPanel(); return true; }
       if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
       if ($('cropSheet').classList.contains('open')) { closeCrop(); return true; }

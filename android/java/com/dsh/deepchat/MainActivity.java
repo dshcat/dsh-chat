@@ -43,6 +43,8 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private ValueCallback<Uri[]> pendingFiles;
+    private boolean pendingMultiple = false;
+    private String[] pendingAccept;
     private final Map<String, String> mime = new HashMap<>();
 
     @Override
@@ -134,6 +136,8 @@ public class MainActivity extends Activity {
         public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
             if (pendingFiles != null) pendingFiles.onReceiveValue(null);
             pendingFiles = callback;
+            pendingMultiple = params != null && params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE;
+            pendingAccept = params != null ? params.getAcceptTypes() : null;
 
             String perm = Build.VERSION.SDK_INT >= 33
                     ? Manifest.permission.READ_MEDIA_IMAGES
@@ -150,7 +154,16 @@ public class MainActivity extends Activity {
     private void openPicker() {
         Intent i = new Intent(Intent.ACTION_GET_CONTENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType("image/*");
+        String[] types = pendingAccept;
+        if (types == null || types.length == 0) {
+            i.setType("*/*");
+        } else if (types.length == 1) {
+            i.setType(types[0] == null || types[0].isEmpty() ? "*/*" : types[0]);
+        } else {
+            i.setType("*/*");
+            i.putExtra(Intent.EXTRA_MIME_TYPES, types);
+        }
+        if (pendingMultiple) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         try {
             startActivityForResult(Intent.createChooser(i, "选择图片"), REQ_PICK);
         } catch (Exception e) {
@@ -175,9 +188,20 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQ_PICK) {
-            Uri uri = (resultCode == RESULT_OK && data != null) ? data.getData() : null;
+            Uri[] result = null;
+            if (resultCode == RESULT_OK && data != null) {
+                ClipData clip = data.getClipData();
+                if (clip != null && clip.getItemCount() > 0) {
+                    result = new Uri[clip.getItemCount()];
+                    for (int k = 0; k < clip.getItemCount(); k++) {
+                        result[k] = clip.getItemAt(k).getUri();
+                    }
+                } else if (data.getData() != null) {
+                    result = new Uri[]{data.getData()};
+                }
+            }
             if (pendingFiles != null) {
-                pendingFiles.onReceiveValue(uri == null ? null : new Uri[]{uri});
+                pendingFiles.onReceiveValue(result);
                 pendingFiles = null;
             }
             return;
