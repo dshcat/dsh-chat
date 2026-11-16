@@ -3,9 +3,9 @@
 (function () {
   'use strict';
 
-  var LS = 'deepchat.v4';
-  var LS_OLD = ['deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.3.0';
+  var LS = 'deepchat.v5';
+  var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
+  var APP_VERSION = '2.4.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -42,8 +42,8 @@
     return {
       settings: {
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
-        system: PRESETS[0].text, think: true, search: true,
-        theme: 'auto', bg: { kind: 'none' }
+        system: PRESETS[0].text, think: true, search: true, effort: 'high',
+        theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {}
       },
       conversations: [], activeId: null
     };
@@ -131,6 +131,9 @@
       state.activeId = o.activeId || null;
     } catch (e) {}
     if (!state.settings.bg) state.settings.bg = { kind: 'none' };
+    if (typeof state.settings.bg.veil !== 'number') state.settings.bg.veil = 0.8;
+    if (!state.settings.effort) state.settings.effort = state.settings.think ? 'high' : 'none';
+    if (!state.settings.usageByDay) state.settings.usageByDay = {};
     try { if (!localStorage.getItem(LS)) save(true); } catch (e) {}
     if (!state.conversations.length) state.activeId = null;
     if (state.activeId && !findConv(state.activeId)) state.activeId = null;
@@ -250,6 +253,12 @@
     document.body.classList.toggle('has-img', isImg);
     document.body.style.backgroundImage = isImg ? 'url("' + b.image + '")' : '';
     document.body.style.backgroundColor = (b.kind === 'color' && b.color) ? b.color : '';
+    var v = typeof b.veil === 'number' ? b.veil : 0.8;
+    document.documentElement.style.setProperty('--veil', String(Math.min(1, Math.max(0.2, v))));
+    var sl = $('bgVeil');
+    if (sl) { sl.value = String(Math.round(v * 100)); }
+    var lab = $('bgVeilVal');
+    if (lab) lab.textContent = Math.round(v * 100) + '%';
   }
 
   function renderSwatches() {
@@ -529,6 +538,10 @@
     wrap.dataset.turn = turn.id;
     wrap.innerHTML =
       '<div class="msg user">' +
+      (q && q.files && q.files.length ? '<div class="uatt">' + q.files.map(function (f) {
+        if (f.kind === 'image') return '<img src="data:image/jpeg;base64,' + f.data + '" alt="">';
+        return '<span class="uatt-item">' + esc(f.name) + '</span>';
+      }).join('') + '</div>' : '') +
       '<div class="body">' + esc(q ? q.q : '') + '</div>' +
       '<div class="uact">' +
       '<span class="utime">' + hhmm(q ? q.ts : Date.now()) + '</span>' +
@@ -587,6 +600,9 @@
     $('chipThink').classList.toggle('on', !!s.think);
     $('chipSearch').classList.toggle('on', !!s.search);
     $('chipCost').textContent = '累计 ' + money(totalCost());
+    var ef = s.effort || 'high';
+    $('chipEffort').textContent = '思考 ' + (ef === 'none' ? '关' : ef === 'low' ? '低' : ef === 'max' ? '最高' : '高');
+    $('chipEffort').classList.toggle('on', ef !== 'none');
   }
 
   function scrollBottom(smooth) {
@@ -607,7 +623,7 @@
     (conv.turns || []).forEach(function (t) {
       var q = curQ(t);
       if (!q) return;
-      out.push({ role: 'user', content: q.q });
+      out.push({ role: 'user', content: userContent(q) });
       if (t === excludeTurn) return;
       var a = q.answers[Math.min(Math.max(q.activeA || 0, 0), q.answers.length - 1)];
       if (!a) return;
@@ -615,6 +631,19 @@
       else if (a.text) out.push({ role: 'assistant', content: [{ type: 'text', text: a.text }] });
     });
     return out;
+  }
+
+  function userContent(q) {
+    if (!q.files || !q.files.length) return q.q;
+    var blocks = [];
+    q.files.forEach(function (f) {
+      if (!f) return;
+      if (f.kind === 'image') blocks.push({ type: 'image', source: { type: 'base64', media_type: f.media, data: f.data } });
+      else if (f.kind === 'doc') blocks.push({ type: 'document', source: { type: 'file', file_id: f.fileId } });
+      else if (f.kind === 'text') blocks.push({ type: 'document', source: { type: 'text', media_type: 'text/plain', data: f.text } });
+    });
+    blocks.push({ type: 'text', text: q.q });
+    return blocks;
   }
 
   function pushEvent(ai, ev) {
@@ -705,11 +734,13 @@
       raf = requestAnimationFrame(function () { raf = 0; paint(); });
     }
 
+    var ef = s.effort || 'high';
     var body = {
       model: s.model, stream: true, max_tokens: MAX_TOKENS,
-      thinking: { type: s.think ? 'enabled' : 'disabled' },
+      thinking: { type: ef === 'none' ? 'disabled' : 'enabled' },
       messages: apiMessages(conv, turn)
     };
+    if (ef !== 'none') body.output_config = { effort: ef };
     if (s.system && s.system.trim()) body.system = s.system.trim();
     if (s.search) body.tools = [
       { type: 'deepseek_web_search', name: 'deepseek_web_search' },
@@ -719,6 +750,11 @@
     function finish() {
       cleanupBlocks(ai);
       if (ai.usage) ai.cost = costOf(ai.usage, s.model);
+      if (ai.cost) {
+        var dk = dayKey(Date.now());
+        state.settings.usageByDay = state.settings.usageByDay || {};
+        state.settings.usageByDay[dk] = (state.settings.usageByDay[dk] || 0) + ai.cost;
+      }
       ai.streaming = false;
       conv.updatedAt = Date.now();
       save(true);
@@ -726,23 +762,33 @@
       setBusy(false);
     }
 
-    fetch(String(s.base || 'https://api.deepseek.com').replace(/\/+$/, '') + API_PATH, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': (s.apiKey || '').trim(),
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify(body),
-      signal: state.abort.signal
-    }).then(function (res) {
-      if (!res.ok) {
+    var apiUrl = String(s.base || 'https://api.deepseek.com').replace(/\/+$/, '') + API_PATH;
+    var headers = {
+      'content-type': 'application/json',
+      'x-api-key': (s.apiKey || '').trim(),
+      'anthropic-version': '2023-06-01'
+    };
+    var hasDoc = JSON.stringify(body.messages).indexOf('"document"') >= 0;
+    if (hasDoc) headers['anthropic-beta'] = 'files-api-2025-04-14';
+
+    function sendOnce(b, allowRetry) {
+      return fetch(apiUrl, {
+        method: 'POST', headers: headers, body: JSON.stringify(b), signal: state.abort.signal
+      }).then(function (res) {
+        if (res.ok) return res;
         return res.text().then(function (txt) {
           var msg = txt;
           try { var j = JSON.parse(txt); msg = (j.error && (j.error.message || j.error.type)) || txt; } catch (e) {}
+          if (allowRetry && b.output_config && String(txt).indexOf('output_config') >= 0) {
+            delete b.output_config;
+            return sendOnce(b, false);
+          }
           throw new Error('HTTP ' + res.status + ' · ' + String(msg).slice(0, 200));
         });
-      }
+      });
+    }
+
+    sendOnce(body, true).then(function (res) {
       var reader = res.body.getReader(), dec = new TextDecoder(), buf = '';
       function handleRaw(raw) {
         raw.split('\n').forEach(function (ln) {
@@ -792,14 +838,140 @@
     return conv;
   }
 
+  /* ---------- 附件 ---------- */
+  var pending = [];
+
+  function isTextLike(file) {
+    if (file.type && file.type.indexOf('text/') === 0) return true;
+    return /\.(txt|md|markdown|csv|json|js|ts|jsx|tsx|py|java|c|h|cpp|go|rs|rb|php|html|css|xml|yml|yaml|log|sh|ini|conf)$/i.test(file.name || '');
+  }
+
+  function renderAttach() {
+    var row = $('attachRow');
+    if (!row) return;
+    row.innerHTML = '';
+    pending.forEach(function (f, i) {
+      var d = document.createElement('div');
+      d.className = 'att' + (f.uploading ? ' uploading' : '');
+      var head = f.kind === 'image' && f.data
+        ? '<img src="' + f.data + '" alt="">'
+        : (f.uploading ? '<span class="spin2"></span>' : ICON.link.replace('<svg', '<svg width="12" height="12"'));
+      d.innerHTML = head + '<span class="nm">' + esc(f.name) + '</span>' +
+        '<button class="rm" data-rm="' + i + '">✕</button>';
+      row.appendChild(d);
+    });
+    var btns = row.querySelectorAll('[data-rm]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].onclick = function () {
+        pending.splice(parseInt(this.getAttribute('data-rm'), 10), 1);
+        renderAttach();
+      };
+    }
+  }
+
+  function resizeImage(file, cb) {
+    var fr = new FileReader();
+    fr.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1400;
+        var sc = Math.min(1, max / Math.max(img.width, img.height));
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * sc);
+        cv.height = Math.round(img.height * sc);
+        var ctx = cv.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        var data;
+        try { data = cv.toDataURL('image/jpeg', 0.8); } catch (e) { cb(null); return; }
+        cb(data.split(',')[1]);
+      };
+      img.onerror = function () { cb(null); };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  }
+
+  function uploadDoc(file, item) {
+    var fd = new FormData();
+    fd.append('purpose', 'text_recognition');
+    fd.append('file', file, file.name);
+    var base = String(state.settings.base || 'https://api.deepseek.com').replace(/\/+$/, '');
+    fetch(base + '/files', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (state.settings.apiKey || '').trim() },
+      body: fd
+    }).then(function (res) {
+      return res.text().then(function (txt) {
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' · ' + txt.slice(0, 120));
+        return JSON.parse(txt);
+      });
+    }).then(function (j) {
+      item.fileId = j.id;
+      item.uploading = false;
+      renderAttach();
+    }).catch(function (err) {
+      item.uploading = false;
+      item.error = (err && err.message) || '上传失败';
+      renderAttach();
+      toast('文件上传失败');
+    });
+  }
+
+  function addFiles(list) {
+    var arr = [];
+    for (var i = 0; i < list.length; i++) arr.push(list[i]);
+    arr.slice(0, 6).forEach(function (file) {
+      if (pending.length >= 6) return;
+      if (/^image\//.test(file.type || '')) {
+        var item = { kind: 'image', name: file.name || '图片', media: 'image/jpeg', uploading: true };
+        pending.push(item);
+        renderAttach();
+        resizeImage(file, function (b64) {
+          if (!b64) { pending = pending.filter(function (x) { return x !== item; }); renderAttach(); toast('图片读取失败'); return; }
+          item.data = b64;
+          item.uploading = false;
+          renderAttach();
+        });
+        return;
+      }
+      if (isTextLike(file)) {
+        if (file.size > 512 * 1024) { toast('文本文件太大（限 512KB）'); return; }
+        var t = { kind: 'text', name: file.name, text: '', uploading: true };
+        pending.push(t);
+        renderAttach();
+        var fr = new FileReader();
+        fr.onload = function () { t.text = String(fr.result || '').slice(0, 400000); t.uploading = false; renderAttach(); };
+        fr.onerror = function () { pending = pending.filter(function (x) { return x !== t; }); renderAttach(); };
+        fr.readAsText(file);
+        return;
+      }
+      if (/\.(pdf|doc|docx|ppt|pptx)$/i.test(file.name || '')) {
+        if (!state.settings.apiKey) { openSheet(); toast('先填 API Key'); return; }
+        var d = { kind: 'doc', name: file.name, fileId: null, uploading: true };
+        pending.push(d);
+        renderAttach();
+        uploadDoc(file, d);
+        return;
+      }
+      toast('暂不支持这种文件');
+    });
+  }
+
   function sendText(text) {
     text = (text || '').trim();
     if (!text) return;
     if (!state.settings.apiKey) { openSheet(); toast('先填 API Key'); return; }
     if (state.streaming) return;
 
+    if (pending.some(function (f) { return f.uploading; })) { toast('文件还在处理，稍等'); return; }
     var conv = ensureConv();
-    var turn = { id: uid(), activeQ: 0, questions: [makeQuestion(text)] };
+    var q0 = makeQuestion(text);
+    q0.files = pending.filter(function (f) { return f.kind === 'image' ? !!f.data : f.kind === 'text' ? !!f.text : !!f.fileId; });
+    pending = [];
+    renderAttach();
+    var turn = { id: uid(), activeQ: 0, questions: [q0] };
     conv.turns.push(turn);
     if (conv.turns.length === 1) conv.title = convTitleOf(text);
     conv.updatedAt = Date.now();
@@ -958,6 +1130,115 @@
     }
   }
 
+  function renderChart() {
+    var box = $('chart30');
+    if (!box) return;
+    var days = [], total = 0;
+    for (var i = 29; i >= 0; i--) {
+      var d = new Date(Date.now() - i * 86400000);
+      var k = dayKey(d.getTime());
+      var c = (state.settings.usageByDay || {})[k] || 0;
+      total += c;
+      days.push({ k: k, c: c, today: i === 0 });
+    }
+    var max = 0;
+    days.forEach(function (x) { if (x.c > max) max = x.c; });
+    box.innerHTML = days.map(function (x) {
+      var h = max ? Math.max(3, Math.round(x.c / max * 100)) : 3;
+      return '<div class="bar' + (x.c ? ' has' : '') + (x.today ? ' today' : '') +
+        '" style="height:' + h + '%" title="' + x.k + '  ' + money(x.c) + '"></div>';
+    }).join('');
+    var note = $('chartNote');
+    if (note) note.textContent = '近 30 天合计 ' + money(total) + ' · 今天 ' + money(days[29].c);
+  }
+
+  var EFFORTS = [
+    { v: 'none', t: '不思考', d: '关闭思考，最快最省' },
+    { v: 'low', t: '低', d: '简单问题，少量思考' },
+    { v: 'high', t: '高', d: '默认，日常够用' },
+    { v: 'max', t: '最高', d: '难题、复杂推理' }
+  ];
+
+  function openEffort() {
+    var body = $('effortBody');
+    body.innerHTML = '';
+    var cur = state.settings.effort || 'high';
+    EFFORTS.forEach(function (e) {
+      var b = document.createElement('button');
+      b.className = 'menu-item';
+      b.innerHTML = '<span style="flex:1">' + e.t + '<span class="mi-desc">' + e.d + '</span></span>' +
+        (cur === e.v ? '<span class="mi-on">✓</span>' : '');
+      b.onclick = function () {
+        state.settings.effort = e.v;
+        state.settings.think = e.v !== 'none';
+        save(true);
+        updateHeader();
+        closeEffort();
+        haptic();
+      };
+      body.appendChild(b);
+    });
+    $('effortSheet').classList.add('open');
+    $('scrim').classList.add('show');
+  }
+  function closeEffort() {
+    $('effortSheet').classList.remove('open');
+    if (!$('sheet').classList.contains('open') && !$('convMenu').classList.contains('open')) $('scrim').classList.remove('show');
+  }
+
+  function exportBackup() {
+    var bak = {
+      app: 'DeepChat', version: APP_VERSION, exportedAt: new Date().toISOString(),
+      settings: (function () {
+        var o = JSON.parse(JSON.stringify(state.settings));
+        delete o.apiKey;
+        return o;
+      })(),
+      conversations: state.conversations
+    };
+    var text = JSON.stringify(bak);
+    var name = 'deepchat-backup-' + dayKey(Date.now()) + '.json';
+    if (window.App && window.App.saveText) {
+      var r = '';
+      try { r = window.App.saveText(name, text); } catch (e) { r = 'ERR:' + e.message; }
+      toast(String(r).indexOf('ERR') === 0 ? '保存失败：' + r : '已保存到「下载」目录');
+      return;
+    }
+    try {
+      var blob = new Blob([text], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      toast('已导出 ' + name);
+    } catch (e) { toast('导出失败'); }
+  }
+
+  function importBackup(text) {
+    var o;
+    try { o = JSON.parse(text); } catch (e) { toast('不是合法的备份文件'); return; }
+    if (!o || !o.conversations) { toast('备份内容不对'); return; }
+    ask('恢复备份', '将用备份里的 ' + o.conversations.length + ' 个对话覆盖当前全部对话，当前数据会丢失。', '覆盖恢复', true, function () {
+      try {
+        state.conversations = o.conversations.map(migrate);
+        if (o.settings) {
+          var key = state.settings.apiKey;
+          state.settings = Object.assign(defaults().settings, o.settings);
+          state.settings.apiKey = key;
+        }
+        state.activeId = state.conversations[0] ? state.conversations[0].id : null;
+        save(true);
+        applyTheme();
+        renderMessages();
+        fillSheet();
+        toast('已恢复');
+      } catch (e) { toast('恢复失败：' + e.message); }
+    });
+  }
+
   function fillSheet() {
     var s = state.settings;
     $('setKey').value = s.apiKey || '';
@@ -969,6 +1250,7 @@
     renderPresets();
     renderSwatches();
     renderModelCards();
+    renderChart();
 
     var turns = 0, cost = 0, tok = 0;
     state.conversations.forEach(function (c) {
@@ -1060,7 +1342,7 @@
   function bind() {
     $('btnMenu').onclick = openDrawer;
     $('btnCloseDrawer').onclick = closeDrawer;
-    $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); closeMenu(); };
+    $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); };
     $('btnSettings').onclick = function () { closeDrawer(); openSheet(); };
     $('btnCloseSheet').onclick = closeSheet;
     $('btnEditClose').onclick = closeEdit;
@@ -1080,6 +1362,25 @@
     $('chipSearch').onclick = function () { state.settings.search = !state.settings.search; save(); updateHeader(); haptic(); };
     $('chipCost').onclick = openSheet;
 
+    $('chipEffort').onclick = openEffort;
+    $('btnAttach').onclick = function () { $('filePick').click(); };
+    $('filePick').onchange = function () { addFiles(this.files || []); this.value = ''; };
+    $('btnExport').onclick = exportBackup;
+    $('btnImport').onclick = function () { $('importFile').click(); };
+    $('importFile').onchange = function () {
+      var f = this.files && this.files[0];
+      if (f) {
+        var fr = new FileReader();
+        fr.onload = function () { importBackup(String(fr.result || '')); };
+        fr.readAsText(f);
+      }
+      this.value = '';
+    };
+    $('bgVeil').oninput = function () {
+      state.settings.bg.veil = (+this.value) / 100;
+      applyBg();
+      save();
+    };
     $('btnSend').onclick = function () {
       if (state.streaming) { if (state.abort) state.abort.abort(); return; }
       sendText($('input').value);
@@ -1190,6 +1491,7 @@
 
     window.__onBack = function () {
       if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
+      if ($('effortSheet').classList.contains('open')) { closeEffort(); return true; }
       if ($('convMenu').classList.contains('open')) { closeMenu(); return true; }
       if ($('editSheet').classList.contains('open')) { closeEdit(); return true; }
       if ($('sheet').classList.contains('open')) { closeSheet(); return true; }

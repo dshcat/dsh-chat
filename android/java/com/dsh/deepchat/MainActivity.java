@@ -3,6 +3,7 @@ package com.dsh.deepchat;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
+import android.content.ContentValues;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
@@ -11,6 +12,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -19,11 +21,15 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.provider.MediaStore;
 import android.widget.Toast;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -191,6 +197,36 @@ public class MainActivity extends Activity {
                     Toast.makeText(MainActivity.this, "已复制", Toast.LENGTH_SHORT).show();
                 }
             });
+        }
+
+        @JavascriptInterface
+        public String saveText(String name, String text) {
+            try {
+                byte[] bytes = text.getBytes("UTF-8");
+                if (Build.VERSION.SDK_INT >= 29) {
+                    ContentValues cv = new ContentValues();
+                    cv.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                    cv.put(MediaStore.MediaColumns.MIME_TYPE, "application/json");
+                    cv.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                    Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    if (uri == null) return "ERR:insert failed";
+                    OutputStream os = getContentResolver().openOutputStream(uri);
+                    if (os == null) return "ERR:no stream";
+                    os.write(bytes);
+                    os.flush();
+                    os.close();
+                    return uri.toString();
+                }
+                File dir = getExternalFilesDir(null);
+                if (dir == null) return "ERR:no dir";
+                File f = new File(dir, name);
+                FileOutputStream fos = new FileOutputStream(f);
+                fos.write(bytes);
+                fos.close();
+                return f.getAbsolutePath();
+            } catch (Exception e) {
+                return "ERR:" + e.getMessage();
+            }
         }
 
         @JavascriptInterface

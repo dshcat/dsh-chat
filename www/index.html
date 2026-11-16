@@ -41,9 +41,14 @@
     <div class="chips">
       <button class="chip" id="chipThink"><span class="dot"></span>深度思考</button>
       <button class="chip" id="chipSearch"><span class="dot"></span>联网</button>
+      <button class="chip" id="chipEffort">思考 高</button>
       <button class="chip ghost" id="chipCost">累计 ¥0</button>
     </div>
+    <div class="attachrow" id="attachRow"></div>
     <div class="inputrow">
+      <button class="attachbtn" id="btnAttach" aria-label="添加图片或文件">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
       <textarea id="input" rows="1" placeholder="发消息…" enterkeyhint="send"></textarea>
       <button id="btnSend" class="sendbtn" aria-label="发送">
         <svg class="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
@@ -66,7 +71,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v2.3</div>
+    <div class="ver" id="drawerVer">v2.4</div>
   </div>
 </aside>
 
@@ -96,10 +101,15 @@
       <span class="label">背景</span>
       <div class="swatches" id="swatches"></div>
       <div class="btnrow">
-        <label class="mini">选张图<input type="file" id="bgFile" accept="image/*"></label>
+        <label class="mini">自定义背景<input type="file" id="bgFile" accept="image/*"></label>
         <button class="mini" id="btnBgClear">清除背景</button>
       </div>
-      <span class="note">图片压缩后只存在本机；换成纯色更省心。</span>
+      <div class="veilrow">
+        <span>透明度</span>
+        <input type="range" id="bgVeil" min="20" max="100" step="1">
+        <span id="bgVeilVal">80%</span>
+      </div>
+      <span class="note">数值越大背景越淡、字越清楚；拉小看得到图。图片压缩后只存本机。</span>
     </div>
 
     <div class="group">模型</div>
@@ -146,15 +156,26 @@
       <span class="note">只存在这台手机里，不会上传。</span>
     </label>
 
+    <div class="group">用量</div>
+    <div class="field">
+      <div class="chart30" id="chart30"></div>
+      <div class="note" id="chartNote">近 30 天 —</div>
+    </div>
+
     <div class="group">数据</div>
     <div class="field">
       <button class="danger" id="btnClear">清空所有对话</button>
       <span class="note" id="usageNote">—</span>
+      <div class="btnrow">
+        <button class="mini" id="btnExport">导出备份</button>
+        <button class="mini" id="btnImport">恢复备份</button>
+      </div>
+      <span class="note">备份含全部对话与设置（不含 API Key），存到手机「下载」目录。</span>
     </div>
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.3.0</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.4.0</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT</span></div>
       <p class="note">非官方第三方客户端，与深度求索公司无隶属关系。对话由 DeepSeek API 生成，请遵守其服务条款；API 费用由 Key 持有人自行承担。</p>
     </div>
@@ -196,6 +217,14 @@
     </div>
   </div>
 </div>
+
+<input type="file" id="filePick" multiple style="display:none">
+<input type="file" id="importFile" accept=".json,application/json" style="display:none">
+
+<section class="sheet menu" id="effortSheet">
+  <div class="grab"></div>
+  <div class="menu-body" id="effortBody"></div>
+</section>
 
 <div class="toast" id="toast"></div>
 <script src="app.js"></script>
