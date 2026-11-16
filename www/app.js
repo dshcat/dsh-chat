@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.0.2';
+  var APP_VERSION = '3.1.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -45,7 +45,7 @@
     return {
       settings: {
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
-        system: PRESETS[0].text, think: true, search: true, effort: 'high',
+        system: PRESETS[0].text, think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
         avatar: { user: '', ai: '' }, agreed: false
       },
@@ -137,6 +137,7 @@
     if (!state.settings.bg) state.settings.bg = { kind: 'none' };
     if (typeof state.settings.bg.veil !== 'number') state.settings.bg.veil = 0.8;
     if (!state.settings.effort) state.settings.effort = state.settings.think ? 'high' : 'none';
+    if (typeof state.settings.temperature !== 'number') state.settings.temperature = 1;
     if (!state.settings.usageByDay) state.settings.usageByDay = {};
     if (!state.settings.avatar) state.settings.avatar = { user: '', ai: '' };
     try { if (!localStorage.getItem(LS)) save(true); } catch (e) {}
@@ -236,6 +237,26 @@
     try { return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; } catch (e) { return 'dark'; }
   }
 
+  function convOv(conv) { return (conv && conv.overrides) || {}; }
+  function effSystem(conv) {
+    var o = convOv(conv);
+    return (typeof o.system === 'string' && o.system.trim()) ? o.system : (state.settings.system || '');
+  }
+  function effTemperature(conv) {
+    var o = convOv(conv);
+    if (typeof o.temperature === 'number') return o.temperature;
+    return typeof state.settings.temperature === 'number' ? state.settings.temperature : 1;
+  }
+  function effAvatar(conv) {
+    var g = state.settings.avatar || { user: '', ai: '' };
+    var o = convOv(conv).avatar || {};
+    return { user: o.user || g.user || '', ai: o.ai || g.ai || '' };
+  }
+  function effBg(conv) {
+    var o = convOv(conv);
+    return o.bg || state.settings.bg || { kind: 'none', veil: 0.8 };
+  }
+
   function applyTheme() {
     var t = resolveTheme();
     document.documentElement.setAttribute('data-theme', t);
@@ -253,7 +274,7 @@
   }
 
   function applyBg() {
-    var b = state.settings.bg || { kind: 'none' };
+    var b = effBg(activeConv());
     var isImg = b.kind === 'image' && !!b.image;
     document.body.classList.toggle('has-img', isImg);
     document.body.style.backgroundImage = isImg ? 'url("' + b.image + '")' : '';
@@ -466,7 +487,7 @@
     var ai = curA(turn);
     if (!ai) return '<div class="ai-head"><div class="avatar"><div class="spinner"></div></div><span>等待生成</span></div>';
 
-    var av = state.settings.avatar || {};
+    var av = effAvatar(activeConv());
     var avHtml;
     if (av.ai) avHtml = '<div class="avatar" style="background-image:url(' + av.ai + ')"></div>';
     else avHtml = '<div class="avatar def">' + (ai.streaming && !ai.text ? '<div class="spinner"></div>' : '<img src="whale.png" alt="">') + '</div>';
@@ -547,7 +568,7 @@
     var wrap = document.createElement('div');
     wrap.className = 'turn';
     wrap.dataset.turn = turn.id;
-    var uav = (state.settings.avatar || {}).user;
+    var uav = effAvatar(activeConv()).user;
     wrap.innerHTML =
       '<div class="msg user">' +
       '<div class="ubox">' +
@@ -675,6 +696,7 @@
     }
     closeQPanel();
     updateRail();
+    applyBg();
     updateHeader();
   }
 
@@ -710,11 +732,110 @@
     $('chatSub').textContent = [s.model, s.think ? '思考' : '快答', s.search ? '联网' : '不联网'].join(' · ');
     $('chipThink').classList.toggle('on', !!s.think);
     $('chipSearch').classList.toggle('on', !!s.search);
-    $('chipCost').textContent = '累计 ' + money(totalCost());
     var ef = s.effort || 'high';
     $('chipEffort').textContent = '思考 ' + (ef === 'none' ? '关' : ef === 'low' ? '低' : ef === 'max' ? '最高' : '高');
     $('chipEffort').classList.toggle('on', ef !== 'none');
+    updateCtxRing();
   }
+
+  function estimateTokens(conv) {
+    var chars = 0, imgs = 0, docs = 0;
+    (conv.turns || []).forEach(function (t) {
+      var q = curQ(t);
+      if (!q) return;
+      chars += (q.q || '').length;
+      (q.files || []).forEach(function (f) {
+        if (f.kind === 'image') imgs++;
+        else if (f.kind === 'text') chars += (f.text || '').length;
+        else docs++;
+      });
+      var a = curA(t);
+      if (a && a.text) chars += a.text.length;
+    });
+    return Math.round(chars / 1.6) + imgs * 800 + docs * 4000;
+  }
+
+  function ctxInfo(conv) {
+    if (!conv) return { used: 0, limit: 1000000, pct: 0 };
+    var used = 0, have = false;
+    for (var i = conv.turns.length - 1; i >= 0; i--) {
+      var a = curA(conv.turns[i]);
+      if (a && a.usage) {
+        used = (a.usage.input_tokens || 0) + (a.usage.cache_read_input_tokens || 0);
+        have = true;
+        break;
+      }
+    }
+    if (!have) used = estimateTokens(conv);
+    var limit = conv.ctxLimit || 1000000;
+    return { used: used, limit: limit, pct: Math.min(100, used / limit * 100), exact: have };
+  }
+
+  function updateCtxRing() {
+    var conv = activeConv();
+    var ring = $('ctxRing');
+    if (!ring) return;
+    var i = ctxInfo(conv);
+    var C = 2 * Math.PI * 11;
+    var fg = $('ringFg');
+    if (fg) fg.style.strokeDashoffset = String(C * (1 - i.pct / 100));
+    $('ctxPct').textContent = i.pct > 0 && i.pct < 1 ? '<1%' : Math.round(i.pct) + '%';
+    ring.classList.toggle('warn', i.pct >= 70 && i.pct < 90);
+    ring.classList.toggle('full', i.pct >= 90);
+  }
+
+  function fillCtx() {
+    var conv = activeConv();
+    var i = ctxInfo(conv);
+    var body = $('ctxBody');
+    var left = Math.max(0, i.limit - i.used);
+    var turns = conv ? conv.turns.length : 0;
+    body.innerHTML =
+      '<div class="ctxbig">' + i.pct.toFixed(i.pct < 10 ? 1 : 0) + '%</div>' +
+      '<div class="ctxsub">' + (i.exact ? '按最近一次请求的实际用量' : '按字数估算（还没成功请求过）') + '</div>' +
+      '<div class="ctxbar"><i style="width:' + Math.min(100, i.pct) + '%"></i></div>' +
+      '<div class="ctxrows">' +
+      '<div class="ctxrow"><span>已用</span><span>' + i.used.toLocaleString() + ' tokens</span></div>' +
+      '<div class="ctxrow"><span>剩余</span><span>' + left.toLocaleString() + ' tokens</span></div>' +
+      '<div class="ctxrow"><span>上限</span><span>' + i.limit.toLocaleString() + ' tokens</span></div>' +
+      '<div class="row ctxrow"><span>对话轮数</span><span>' + turns + ' 轮</span></div>' +
+      '</div>' +
+      '<p class="note">上限按模型文档的 1M 计算；如果服务端返回更小的限制，这里会自动改成实际值。' +
+      '费用仅为估算，高峰期为两倍。</p>';
+  }
+
+  function fillConvSet() {
+    var conv = ensureConv();
+    var o = convOv(conv);
+    $('csTitle').value = conv.title || '';
+    var t = effTemperature(conv);
+    $('csTemp').value = String(Math.round(t * 10));
+    $('csTempVal').textContent = t.toFixed(1);
+    $('csSystem').value = typeof o.system === 'string' ? o.system : '';
+    var av = effAvatar(conv);
+    var u = $('csAvUser'), i = $('csAvAi');
+    u.style.backgroundImage = av.user ? 'url(' + av.user + ')' : '';
+    u.innerHTML = av.user ? '' : AV_USER.replace('<svg', '<svg class="def-user"');
+    i.style.backgroundImage = av.ai ? 'url(' + av.ai + ')' : '';
+    i.innerHTML = av.ai ? '' : '<img src="whale.png" alt="" style="width:70%;height:70%;object-fit:contain">';
+    var ci = ctxInfo(conv);
+    $('csCtxLine').textContent = '已用 ' + ci.used.toLocaleString() + ' / ' + ci.limit.toLocaleString() +
+      ' tokens（' + Math.round(ci.pct) + '%）';
+  }
+
+  function openConvSet() {
+    ensureConv();
+    fillConvSet();
+    $('convSetSheet').classList.add('open');
+    $('scrim').classList.add('show');
+  }
+  function closeConvSet() {
+    $('convSetSheet').classList.remove('open');
+    $('scrim').classList.remove('show');
+  }
+
+  function openCtx() { fillCtx(); $('ctxSheet').classList.add('open'); $('scrim').classList.add('show'); }
+  function closeCtx() { $('ctxSheet').classList.remove('open'); $('scrim').classList.remove('show'); }
 
   function scrollBottom(smooth) {
     var sc = $('scroller');
@@ -822,6 +943,20 @@
     });
   }
 
+  function trimMessages(msgs, limit) {
+    function est(list) {
+      var c = 0;
+      for (var i = 0; i < list.length; i++) c += JSON.stringify(list[i]).length;
+      return c / 2.2;
+    }
+    var guard = 0;
+    while (msgs.length > 2 && est(msgs) > limit * 0.85 && guard++ < 300) {
+      msgs.shift();
+      if (msgs.length && msgs[0].role !== 'user') msgs.shift();
+    }
+    return msgs;
+  }
+
   function runStream(conv, turn) {
     var s = state.settings;
     var ai = curA(turn);
@@ -854,7 +989,9 @@
       messages: apiMessages(conv, turn)
     };
     if (ef !== 'none') body.output_config = { effort: ef };
-    if (s.system && s.system.trim()) body.system = s.system.trim();
+    var sysText = effSystem(conv);
+    if (sysText && sysText.trim()) body.system = sysText.trim();
+    body.temperature = effTemperature(conv);
     if (s.search) body.tools = [
       { type: 'deepseek_web_search', name: 'deepseek_web_search' },
       { type: 'deepseek_read_url', name: 'deepseek_read_url' }
@@ -893,7 +1030,10 @@
       'anthropic-version': '2023-06-01'
     };
     var hasDoc = JSON.stringify(body.messages).indexOf('"document"') >= 0;
-    if (hasDoc) headers['anthropic-beta'] = 'files-api-2025-04-14';
+    var betas = [];
+    if (hasDoc) betas.push('files-api-2025-04-14');
+    if (estimateTokens(conv) > 28000) betas.push('context-1m-2025-08-07');
+    if (betas.length) headers['anthropic-beta'] = betas.join(',');
 
     function sendOnce(b, allowRetry) {
       return fetch(apiUrl, {
@@ -918,6 +1058,17 @@
             });
             toast('图片没被接受，已按纯文本重发');
             return sendOnce(b, false);
+          }
+          var m = String(txt).match(/exceeds max (\d+) tokens/i);
+          if (allowRetry && m && b.messages && b.messages.length > 2) {
+            var lim = parseInt(m[1], 10);
+            if (lim > 1000) {
+              conv.ctxLimit = lim;
+              b.messages = trimMessages(b.messages, lim);
+              save(true);
+              toast('上下文超过 ' + lim.toLocaleString() + '，已省略最早的对话重试');
+              return sendOnce(b, false);
+            }
           }
           throw new Error('HTTP ' + res.status + ' · ' + String(msg).slice(0, 200));
         });
@@ -1651,6 +1802,9 @@
     $('setSystem').value = s.system || '';
     $('setThink').checked = !!s.think;
     $('setSearch').checked = !!s.search;
+    var gt = typeof s.temperature === 'number' ? s.temperature : 1;
+    $('setTemp').value = String(Math.round(gt * 10));
+    $('setTempVal').textContent = gt.toFixed(1);
     $('aboutVer').textContent = APP_VERSION;
     applyTheme();
     renderPresets();
@@ -1799,7 +1953,7 @@
     $('btnCloseDrawer').onclick = closeDrawer;
     $('scrim').onclick = function () {
       if ($('agreeSheet').classList.contains('open')) return;
-      closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); closeCrop();
+      closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); closeCrop(); closeCtx(); closeConvSet();
     };
     $('btnSettings').onclick = function () { closeDrawer(); openSheet(); };
     $('btnCloseSheet').onclick = closeSheet;
@@ -1818,7 +1972,63 @@
 
     $('chipThink').onclick = function () { state.settings.think = !state.settings.think; save(); updateHeader(); haptic(); };
     $('chipSearch').onclick = function () { state.settings.search = !state.settings.search; save(); updateHeader(); haptic(); };
-    $('chipCost').onclick = openSheet;
+    $('ctxRing').onclick = openCtx;
+    $('btnCtxClose').onclick = closeCtx;
+    $('btnConvSet').onclick = openConvSet;
+    $('btnConvSetClose').onclick = closeConvSet;
+
+    $('setTemp').oninput = function () {
+      state.settings.temperature = (+this.value) / 10;
+      $('setTempVal').textContent = state.settings.temperature.toFixed(1);
+      save();
+    };
+
+    $('csTitle').oninput = function () {
+      var c = activeConv();
+      if (!c) return;
+      c.title = this.value;
+      updateHeader();
+    };
+    $('csTemp').oninput = function () {
+      var c = ensureConv();
+      c.overrides = c.overrides || {};
+      c.overrides.temperature = (+this.value) / 10;
+      $('csTempVal').textContent = c.overrides.temperature.toFixed(1);
+      save();
+    };
+    $('csSystem').oninput = function () {
+      var c = ensureConv();
+      c.overrides = c.overrides || {};
+      c.overrides.system = this.value;
+      save();
+    };
+    $('csPickUser').onclick = function () { cropTarget = 'csUser'; $('cropFile').click(); };
+    $('csPickAi').onclick = function () { cropTarget = 'csAi'; $('cropFile').click(); };
+    $('csAvatarReset').onclick = function () {
+      var c = ensureConv();
+      if (c.overrides) { delete c.overrides.avatar; }
+      save(true); fillConvSet(); renderMessages(); toast('已跟随全局头像');
+    };
+    $('csBgFile').onchange = function () {
+      var f = this.files && this.files[0];
+      this.value = '';
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        openCrop(String(fr.result), window.innerWidth / window.innerHeight, function (data) {
+          var c = ensureConv();
+          c.overrides = c.overrides || {};
+          c.overrides.bg = { kind: 'image', image: data, veil: (state.settings.bg && state.settings.bg.veil) || 0.8 };
+          save(true); applyBg(); toast('这个对话的背景已换');
+        });
+      };
+      fr.readAsDataURL(f);
+    };
+    $('csBgClear').onclick = function () {
+      var c = ensureConv();
+      if (c.overrides) { delete c.overrides.bg; }
+      save(true); applyBg(); toast('已跟随全局背景');
+    };
 
     $('chipEffort').onclick = openEffort;
     $('btnAttach').onclick = function () { $('filePick').click(); };
@@ -1980,9 +2190,18 @@
       var fr = new FileReader();
       fr.onload = function () {
         openCrop(String(fr.result), 1, function (data) {
-          state.settings.avatar = state.settings.avatar || { user: '', ai: '' };
-          state.settings.avatar[cropTarget] = data;
-          save(true); renderAvatarSettings(); renderMessages(); toast('头像已更新');
+          if (cropTarget === 'user' || cropTarget === 'ai') {
+            state.settings.avatar = state.settings.avatar || { user: '', ai: '' };
+            state.settings.avatar[cropTarget] = data;
+            renderAvatarSettings();
+          } else {
+            var conv = ensureConv();
+            conv.overrides = conv.overrides || {};
+            conv.overrides.avatar = conv.overrides.avatar || {};
+            conv.overrides.avatar[cropTarget === 'csUser' ? 'user' : 'ai'] = data;
+            if ($('convSetSheet').classList.contains('open')) fillConvSet();
+          }
+          save(true); renderMessages(); toast('头像已更新');
         });
       };
       fr.readAsDataURL(f);
@@ -2115,6 +2334,8 @@
     window.__onBack = function () {
       if ($('agreeSheet').classList.contains('open')) { return true; }
       if ($('lightbox').classList.contains('show')) { closeLightbox(); return true; }
+      if ($('ctxSheet').classList.contains('open')) { closeCtx(); return true; }
+      if ($('convSetSheet').classList.contains('open')) { closeConvSet(); return true; }
       if (qpanelOpen) { closeQPanel(); return true; }
       if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
       if ($('cropSheet').classList.contains('open')) { closeCrop(); return true; }

@@ -16,10 +16,10 @@
     <button class="iconbtn" id="btnMenu" aria-label="对话列表">
       <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
     </button>
-    <div class="titlewrap">
+    <button class="titlewrap" id="btnConvSet" aria-label="当前对话设置">
       <div class="title" id="chatTitle">新对话</div>
       <div class="sub" id="chatSub">准备就绪</div>
-    </div>
+    </button>
     <button class="iconbtn" id="btnNew" aria-label="新对话">
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
     </button>
@@ -42,7 +42,13 @@
       <button class="chip" id="chipThink"><span class="dot"></span>深度思考</button>
       <button class="chip" id="chipSearch"><span class="dot"></span>联网</button>
       <button class="chip" id="chipEffort">思考 高</button>
-      <button class="chip ghost" id="chipCost">累计 ¥0</button>
+      <button class="ctxring" id="ctxRing" aria-label="上下文用量">
+        <svg viewBox="0 0 28 28">
+          <circle class="ringbg" cx="14" cy="14" r="11"></circle>
+          <circle class="ringfg" id="ringFg" cx="14" cy="14" r="11"></circle>
+        </svg>
+        <span id="ctxPct">0%</span>
+      </button>
     </div>
     <div class="attachrow" id="attachRow"></div>
     <div class="inputrow">
@@ -88,7 +94,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v3.02</div>
+    <div class="ver" id="drawerVer">v3.1</div>
   </div>
 </aside>
 
@@ -169,6 +175,11 @@
       </div>
       <label class="switch"><input type="checkbox" id="setSearch"><i></i></label>
     </div>
+    <div class="field">
+      <span class="label">默认温度 <span class="tempval" id="setTempVal">1.0</span></span>
+      <input type="range" id="setTemp" min="0" max="20" step="1">
+      <span class="note">思考模式下温度不生效；每个对话还可以单独覆盖。</span>
+    </div>
 
     <div class="group">提示词</div>
     <div class="field">
@@ -196,6 +207,7 @@
       <div class="chartaxis"><span id="axisFrom"></span><span id="axisTo"></span></div>
       <div class="chartsel" id="chartSel">点一下柱子，看当天用量</div>
       <div class="note" id="chartNote">近 15 天 —</div>
+      <div class="note">费用按官方价格估算，仅供参考；高峰期为两倍。</div>
     </div>
 
     <div class="group">数据</div>
@@ -211,7 +223,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.0.2</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.1.0</span></div>
       <div class="aboutrow"><span>性质</span><span>第三方客户端</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT · 免费开源</span></div>
       <div class="aboutrow"><span>密钥</span><span>不托管 · 仅存本机</span></div>
@@ -288,6 +300,61 @@
 <section class="sheet menu" id="effortSheet">
   <div class="grab"></div>
   <div class="menu-body" id="effortBody"></div>
+</section>
+
+<section class="sheet menu" id="ctxSheet">
+  <div class="grab"></div>
+  <div class="sheet-head"><div class="sheet-title">上下文用量</div>
+    <button class="iconbtn small" id="btnCtxClose" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body ctxbody" id="ctxBody"></div>
+</section>
+
+<section class="sheet" id="convSetSheet">
+  <div class="grab"></div>
+  <div class="sheet-head"><div class="sheet-title">对话设置</div>
+    <button class="iconbtn small" id="btnConvSetClose" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body">
+    <label class="field">
+      <span class="label">对话名称</span>
+      <input id="csTitle" type="text" placeholder="给这个对话起个名字">
+    </label>
+
+    <div class="field">
+      <span class="label">温度 <span class="tempval" id="csTempVal">1.0</span></span>
+      <input type="range" id="csTemp" min="0" max="20" step="1">
+      <span class="note">0 最稳、2 最散。思考模式下该参数不生效。</span>
+    </div>
+
+    <div class="field">
+      <span class="label">本对话的系统提示词</span>
+      <textarea id="csSystem" rows="4" placeholder="留空则用全局设置里的提示词"></textarea>
+    </div>
+
+    <div class="field">
+      <span class="label">头像</span>
+      <div class="avatarrow">
+        <button class="avatarpick" id="csPickUser"><span class="avp" id="csAvUser"></span><span class="avlabel">用户</span></button>
+        <button class="avatarpick" id="csPickAi"><span class="avp" id="csAvAi"></span><span class="avlabel">AI</span></button>
+        <button class="mini" id="csAvatarReset">跟随全局</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label">背景</span>
+      <div class="btnrow">
+        <label class="mini">自定义背景<input type="file" id="csBgFile" accept="image/*"></label>
+        <button class="mini" id="csBgClear">跟随全局</button>
+      </div>
+      <span class="note">只为这个对话单独换背景，别的对话不受影响。</span>
+    </div>
+
+    <div class="field">
+      <span class="label">上下文</span>
+      <div class="note" id="csCtxLine">—</div>
+    </div>
+  </div>
 </section>
 
 <section class="sheet full" id="agreeSheet">
