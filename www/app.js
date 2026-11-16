@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.0.0';
+  var APP_VERSION = '3.0.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -675,10 +675,24 @@
     updateHeader();
   }
 
+  function allTurns(conv) {
+    var out = [], seen = {};
+    function walk(list) {
+      (list || []).forEach(function (t) {
+        if (!t || seen[t.id]) return;
+        seen[t.id] = 1;
+        out.push(t);
+        (t.questions || []).forEach(function (q) { walk(q.tail); });
+      });
+    }
+    walk(conv && conv.turns ? conv.turns : []);
+    return out;
+  }
+
   function totalCost() {
     var t = 0;
     state.conversations.forEach(function (c) {
-      (c.turns || []).forEach(function (turn) {
+      allTurns(c).forEach(function (turn) {
         (turn.questions || []).forEach(function (q) {
           (q.answers || []).forEach(function (a) { if (a.cost) t += a.cost; });
         });
@@ -1125,9 +1139,17 @@
   function editAndRegenerate(turn, text) {
     var conv = activeConv();
     if (!conv) return;
+    var idx = conv.turns.indexOf(turn);
     var old = curQ(turn);
+    var oldFiles = old && old.files ? old.files.slice() : null;
+    // 旧版本收下它之后的所有轮次，形成独立分支
+    if (idx >= 0) {
+      if (old) old.tail = conv.turns.slice(idx + 1);
+      conv.turns = conv.turns.slice(0, idx + 1);
+    }
     var nq = makeQuestion(text);
-    if (old && old.files && old.files.length) nq.files = old.files.slice();
+    if (oldFiles && oldFiles.length) nq.files = oldFiles;
+    nq.tail = [];
     turn.questions.push(nq);
     turn.activeQ = turn.questions.length - 1;
     conv.updatedAt = Date.now();
@@ -1139,7 +1161,17 @@
     if (state.streaming) { toast('这条还在生成'); return; }
     var i = (turn.activeQ || 0) + delta;
     if (i < 0 || i >= turn.questions.length) return;
-    turn.activeQ = i;
+    var conv = activeConv();
+    var idx = conv ? conv.turns.indexOf(turn) : -1;
+    if (conv && idx >= 0) {
+      var cur = curQ(turn);
+      if (cur) cur.tail = conv.turns.slice(idx + 1);   // 存下当前分支后续
+      turn.activeQ = i;
+      var nq = curQ(turn);
+      conv.turns = conv.turns.slice(0, idx + 1).concat(nq && nq.tail ? nq.tail : []);
+    } else {
+      turn.activeQ = i;
+    }
     save(true);
     renderMessages();
     haptic();
@@ -1189,7 +1221,7 @@
       hits.push({ who: who, html: snippetHtml(String(text), q) });
     }
     scan(c.title, '标题');
-    (c.turns || []).forEach(function (t) {
+    allTurns(c).forEach(function (t) {
       (t.questions || []).forEach(function (qu) {
         scan(qu.q, '提问');
         (qu.answers || []).forEach(function (a) { scan(a.text, '回答'); });
@@ -1621,7 +1653,7 @@
 
     var turns = 0, cost = 0, tok = 0;
     state.conversations.forEach(function (c) {
-      (c.turns || []).forEach(function (t) {
+      allTurns(c).forEach(function (t) {
         turns += 1;
         (t.questions || []).forEach(function (q) {
           (q.answers || []).forEach(function (a) {
@@ -1842,6 +1874,36 @@
         scrollBottom();
       }
     });
+
+    // 长按会话直接打开操作菜单（删除/置顶/收藏）
+    (function () {
+      var box = $('convlist');
+      var timer = null, longPressed = false;
+      function cancel() { clearTimeout(timer); timer = null; }
+      box.addEventListener('pointerdown', function (e) {
+        var row = e.target.closest('.conv');
+        if (!row || e.target.closest('[data-act="more"]')) return;
+        longPressed = false;
+        var cid = row.dataset.cid;
+        cancel();
+        timer = setTimeout(function () {
+          timer = null;
+          longPressed = true;
+          haptic();
+          openConvMenu(cid);
+        }, 460);
+      });
+      box.addEventListener('pointermove', cancel);
+      box.addEventListener('pointerup', cancel);
+      box.addEventListener('pointercancel', cancel);
+      box.addEventListener('pointerleave', cancel);
+      box.addEventListener('click', function (e) {
+        if (!longPressed) return;
+        e.preventDefault();
+        e.stopPropagation();
+        longPressed = false;
+      }, true);
+    })();
 
     $('themeSeg').addEventListener('click', function (e) {
       var b = e.target.closest('button');
