@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.6.2';
+  var APP_VERSION = '3.6.3';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1247,11 +1247,16 @@
     return /\.(txt|md|markdown|csv|json|js|ts|jsx|tsx|py|java|c|h|cpp|go|rs|rb|php|html|css|xml|yml|yaml|log|sh|ini|conf)$/i.test(file.name || '');
   }
 
-  function renderAttach() {
-    var row = $('attachRow');
+  var editFiles = [];
+  var attachTarget = 'composer';
+
+  function renderAttach() { renderAttachTo($('attachRow'), pending, renderAttach); }
+  function renderEditAttach() { renderAttachTo($('editAttachRow'), editFiles, renderEditAttach); }
+
+  function renderAttachTo(row, arr, redraw) {
     if (!row) return;
     row.innerHTML = '';
-    pending.forEach(function (f, i) {
+    arr.forEach(function (f, i) {
       var d = document.createElement('div');
       d.className = 'att' + (f.uploading ? ' uploading' : '');
       var head = f.kind === 'image' && f.data
@@ -1264,8 +1269,8 @@
     var btns = row.querySelectorAll('[data-rm]');
     for (var i = 0; i < btns.length; i++) {
       btns[i].onclick = function () {
-        pending.splice(parseInt(this.getAttribute('data-rm'), 10), 1);
-        renderAttach();
+        arr.splice(parseInt(this.getAttribute('data-rm'), 10), 1);
+        redraw();
       };
     }
   }
@@ -1320,39 +1325,46 @@
     });
   }
 
-  function addFiles(list) {
+  function dropItem(arr, item) {
+    var i = arr.indexOf(item);
+    if (i >= 0) arr.splice(i, 1);
+  }
+
+  function addFiles(list, target, redraw) {
+    var box = target || pending;
+    var draw = redraw || renderAttach;
     var arr = [];
     for (var i = 0; i < list.length; i++) arr.push(list[i]);
     arr.slice(0, 6).forEach(function (file) {
-      if (pending.length >= 6) return;
+      if (box.length >= 6) return;
       if (/^image\//.test(file.type || '')) {
         var item = { kind: 'image', name: file.name || '图片', media: 'image/jpeg', uploading: true };
-        pending.push(item);
-        renderAttach();
+        box.push(item);
+        draw();
         resizeImage(file, function (b64) {
-          if (!b64) { pending = pending.filter(function (x) { return x !== item; }); renderAttach(); toast('图片读取失败'); return; }
+          if (!b64) { dropItem(box, item); draw(); toast('图片读取失败'); return; }
           item.data = b64;
           item.uploading = false;
-          renderAttach();
+          draw();
         });
         return;
       }
       if (isTextLike(file)) {
         if (file.size > 512 * 1024) { toast('文本文件太大（限 512KB）'); return; }
         var t = { kind: 'text', name: file.name, text: '', uploading: true };
-        pending.push(t);
-        renderAttach();
+        box.push(t);
+        draw();
         var fr = new FileReader();
-        fr.onload = function () { t.text = String(fr.result || '').slice(0, 400000); t.uploading = false; renderAttach(); };
-        fr.onerror = function () { pending = pending.filter(function (x) { return x !== t; }); renderAttach(); };
+        fr.onload = function () { t.text = String(fr.result || '').slice(0, 400000); t.uploading = false; draw(); };
+        fr.onerror = function () { dropItem(box, t); draw(); };
         fr.readAsText(file);
         return;
       }
       if (/\.(pdf|doc|docx|ppt|pptx)$/i.test(file.name || '')) {
         if (!state.settings.apiKey) { openSheet(); toast('先填 API Key'); return; }
         var d = { kind: 'doc', name: file.name, fileId: null, uploading: true };
-        pending.push(d);
-        renderAttach();
+        box.push(d);
+        draw();
         uploadDoc(file, d);
         return;
       }
@@ -1405,12 +1417,12 @@
     runStream(conv, turn);
   }
 
-  function editAndRegenerate(turn, text) {
+  function editAndRegenerate(turn, text, files) {
     var conv = activeConv();
     if (!conv) return;
     var idx = conv.turns.indexOf(turn);
     var old = curQ(turn);
-    var oldFiles = old && old.files ? old.files.slice() : null;
+    var oldFiles = files ? files.slice() : (old && old.files ? old.files.slice() : null);
     // 旧版本收下它之后的所有轮次，形成独立分支
     if (idx >= 0) {
       if (old) old.tail = conv.turns.slice(idx + 1);
@@ -1600,10 +1612,18 @@
   function closeSheet() { $('sheet').classList.remove('open'); $('scrim').classList.remove('show'); }
   function openEdit(turn) {
     state.editing = turn;
-    $('editText').value = curQ(turn).q;
+    var q = curQ(turn);
+    var txt = q ? (q.q || '') : '';
+    editFiles = (q && q.files ? q.files.slice() : []);
+    renderEditAttach();
+    $('editText').value = txt;
     $('editSheet').classList.add('open');
     $('scrim').classList.add('show');
-    setTimeout(function () { $('editText').focus(); }, 150);
+    setTimeout(function () {
+      var el = $('editText');
+      el.focus();
+      if (txt && !el.value) el.value = txt;   // 某些输入法聚焦时会清空，补一次
+    }, 160);
   }
   function closeEdit() { $('editSheet').classList.remove('open'); $('scrim').classList.remove('show'); state.editing = null; }
 
@@ -2339,8 +2359,25 @@
       save(true); applyBg(); toast('已跟随全局背景');
     };
 
-    $('btnAttach').onclick = function () { $('filePick').click(); };
-    $('filePick').onchange = function () { addFiles(this.files || []); this.value = ''; };
+    $('btnAttach').onclick = function () {
+      attachTarget = 'composer';
+      $('filePick').click();
+    };
+    $('btnEditAttach').onclick = function () {
+      attachTarget = 'edit';
+      $('filePick').click();
+    };
+    $('btnEditClearAtt').onclick = function () {
+      editFiles = [];
+      renderEditAttach();
+    };
+    $('filePick').onchange = function () {
+      var list = this.files || [];
+      if (attachTarget === 'edit') addFiles(list, editFiles, renderEditAttach);
+      else addFiles(list);
+      this.value = '';
+      attachTarget = 'composer';
+    };
     $('btnExport').onclick = exportBackup;
     $('btnImport').onclick = function () { $('importFile').click(); };
     $('importFile').onchange = function () {
@@ -2367,6 +2404,36 @@
     input.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendText(input.value); }
     });
+
+    (function () {
+      var box = $('messages');
+      var timer = null, longPressed = false;
+      function cancel() { clearTimeout(timer); timer = null; }
+      box.addEventListener('pointerdown', function (e) {
+        var u = e.target.closest('.msg.user');
+        if (!u) return;
+        var turnEl = u.closest('.turn');
+        if (!turnEl) return;
+        longPressed = false;
+        cancel();
+        timer = setTimeout(function () {
+          timer = null;
+          longPressed = true;
+          haptic();
+          var t = findTurn(turnEl.getAttribute('data-turn'));
+          if (t) openEdit(t);
+        }, 460);
+      });
+      box.addEventListener('pointermove', cancel);
+      box.addEventListener('pointerup', cancel);
+      box.addEventListener('pointercancel', cancel);
+      box.addEventListener('click', function (e) {
+        if (!longPressed) return;
+        e.preventDefault();
+        e.stopPropagation();
+        longPressed = false;
+      }, true);
+    })();
 
     $('messages').addEventListener('click', function (e) {
       var img = e.target.closest('img[data-full]');
@@ -2406,8 +2473,9 @@
       var txt = $('editText').value.trim();
       var qq = curQ(turn);
       if (!txt && !(qq && qq.files && qq.files.length)) { toast('内容不能为空'); return; }
+      var files = editFiles.slice();
       closeEdit();
-      editAndRegenerate(turn, txt);
+      editAndRegenerate(turn, txt, files);
     };
 
     $('convlist').addEventListener('click', function (e) {
