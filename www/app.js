@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.5.1';
+  var APP_VERSION = '3.6.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1977,10 +1977,25 @@
   }
 
   function openEffort() {
-    syncEffortUI();
+    var body = $('effortBody');
+    if (!body) return;
+    body.innerHTML = '';
+    var cur = effortIndex(state.settings.effort || 'high');
+    EFFORTS.forEach(function (e, idx) {
+      var b = document.createElement('button');
+      b.className = 'menu-item eff-item' + (idx === cur ? ' active' : '');
+      b.innerHTML = '<span class="eff-dot" style="background:' + gaugeColorAt(idx / 3) + '"></span>' +
+        '<span style="flex:1"><span class="eff-t">' + e.t + '</span>' +
+        '<span class="eff-d">' + e.d + '</span></span>' +
+        (idx === cur ? '<span class="mi-on">✓</span>' : '');
+      b.onclick = function () {
+        setEffortIndex(idx);
+        closeEffort();
+      };
+      body.appendChild(b);
+    });
     $('effortSheet').classList.add('open');
     $('scrim').classList.add('show');
-    startParticles();
   }
   function closeEffort() {
     stopParticles();
