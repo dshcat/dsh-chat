@@ -94,7 +94,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v3.6</div>
+    <div class="ver" id="drawerVer">v3.61</div>
   </div>
 </aside>
 
@@ -117,6 +117,14 @@
         <button data-lang="zh-Hant">繁體中文</button>
         <button data-lang="en">English</button>
       </div>
+    </div>
+
+    <div class="field rowfield">
+      <div>
+        <span class="label">隐藏用量与花费</span>
+        <span class="note">藏起每条回答的 tokens 和金额，以及每日花费图</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="setHideUsage"><i></i></label>
     </div>
 
     <div class="group">外观</div>
@@ -211,6 +219,7 @@
       </a>
     </label>
 
+    <div class="usage-sec">
     <div class="group">用量</div>
     <div class="field">
       <div class="chart30" id="chart30"></div>
@@ -218,6 +227,7 @@
       <div class="chartsel" id="chartSel">点一下柱子，看当天用量</div>
       <div class="note" id="chartNote">近 15 天 —</div>
       <div class="note">费用按官方价格估算，仅供参考；高峰期为两倍。</div>
+    </div>
     </div>
 
     <div class="group">数据</div>
@@ -233,7 +243,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.6.0</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.6.1</span></div>
       <div class="aboutrow"><span>性质</span><span>第三方客户端</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT · 免费开源</span></div>
       <div class="aboutrow"><span>密钥</span><span>不托管 · 仅存本机</span></div>

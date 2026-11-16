@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.6.0';
+  var APP_VERSION = '3.6.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -47,7 +47,7 @@
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: PRESETS[0].text, think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
-        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans'
+        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false
       },
       conversations: [], activeId: null
     };
@@ -127,12 +127,13 @@
       }
     }
     state.settings = d.settings;
+    state.restartFresh = true;
     if (!raw) return;
     try {
       var o = JSON.parse(raw);
       state.settings = Object.assign(d.settings, o.settings || {});
       state.conversations = (o.conversations || []).map(migrate);
-      state.activeId = o.activeId || null;
+      state.activeId = null;   // 每次启动都是一张新对话
     } catch (e) {}
     if (!state.settings.bg) state.settings.bg = { kind: 'none' };
     if (typeof state.settings.bg.veil !== 'number') state.settings.bg.veil = 0.8;
@@ -381,6 +382,10 @@
       }
     }
     applyBg();
+  }
+
+  function applyPrivacy() {
+    document.body.classList.toggle('hide-usage', !!state.settings.hideUsage);
   }
 
   function applyBg() {
@@ -2062,6 +2067,7 @@
     $('setSystem').value = s.system || '';
     $('setThink').checked = !!s.think;
     $('setSearch').checked = !!s.search;
+    $('setHideUsage').checked = !!s.hideUsage;
     var gt = typeof s.temperature === 'number' ? s.temperature : 1;
     $('setTemp').value = String(Math.round(gt * 10));
     $('setTempVal').textContent = gt.toFixed(1);
@@ -2264,6 +2270,11 @@
     $('btnConvSet').onclick = openConvSet;
     $('btnConvSetClose').onclick = closeConvSet;
 
+    $('setHideUsage').onchange = function () {
+      state.settings.hideUsage = this.checked;
+      save(true);
+      applyPrivacy();
+    };
     $('setTemp').oninput = function () {
       state.settings.temperature = (+this.value) / 10;
       $('setTempVal').textContent = state.settings.temperature.toFixed(1);
@@ -2661,6 +2672,7 @@
     bind();
     buildGauge();
     applyTheme();
+    applyPrivacy();
     applyLang();
     renderMessages();
     updateHeader();
