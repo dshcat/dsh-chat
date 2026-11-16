@@ -737,25 +737,21 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .eff-name{font-size:15px;font-weight:680;color:var(--lv, var(--txt));margin-bottom:4px}
 .eff-desc{font-size:12.5px;color:var(--dim);line-height:1.6}
 
-/* ---------- 3.4 半圆形推理盘 ---------- */
-.gauge{position:relative;width:100%;max-width:320px;margin:6px auto 0;touch-action:none}
+/* ---------- 3.4 半圆扇形推理盘 ---------- */
+.gauge{position:relative;width:100%;max-width:330px;margin:8px auto 0;touch-action:none}
 .gauge svg{width:100%;height:auto;display:block;overflow:visible}
-.g-bg{fill:none;stroke:var(--bg3);stroke-width:12;stroke-linecap:round}
-.g-prog{
-  fill:none;stroke:url(#gGrad);stroke-width:12;stroke-linecap:round;
-  stroke-dasharray:100;stroke-dashoffset:66;
-  transition:stroke-dashoffset .3s cubic-bezier(.3,.7,.3,1);
-  filter:drop-shadow(0 0 6px rgba(77,107,254,.35));
+.g-base{fill:var(--bg3);stroke:var(--line);stroke-width:1}
+.g-sector{
+  fill:url(#gGrad);stroke:none;opacity:.92;
+  transition:opacity .2s;
+  filter:drop-shadow(0 0 10px rgba(77,107,254,.18));
 }
-.g-needle{transition:transform .32s cubic-bezier(.34,1.4,.5,1);transform-origin:120px 120px}
-.g-needle line{stroke:var(--txt);stroke-width:3.4;stroke-linecap:round}
-.g-needle .hub{fill:var(--bg2);stroke:var(--txt);stroke-width:2.5}
-.g-needle .tip{fill:var(--lv, var(--acc));stroke:none;filter:drop-shadow(0 0 6px var(--lv, var(--acc)))}
-.g-ticks line{stroke:var(--line2);stroke-width:2;stroke-linecap:round}
+.g-needle{stroke:var(--txt);stroke-width:2.6;stroke-linecap:round;opacity:.9}
+.g-hub{fill:var(--bg2);stroke:var(--txt);stroke-width:2.4}
+.g-ticks line{stroke:var(--bg2);stroke-width:2.4;stroke-linecap:round;opacity:.8}
 .g-labels{position:absolute;inset:0;pointer-events:none}
 .g-labels span{
   position:absolute;transform:translate(-50%,-50%);font-size:11.5px;color:var(--dim2);
-  white-space:nowrap;transition:color .2s,transform .2s;
+  white-space:nowrap;transition:color .2s;
 }
-.g-labels span.on{color:var(--txt);font-weight:650;transform:translate(-50%,-50%) scale(1.08)}
-.gauge.on .g-bg{stroke:var(--line2)}
+.g-labels span.on{color:var(--txt);font-weight:650}

@@ -94,7 +94,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v3.4</div>
+    <div class="ver" id="drawerVer">v3.41</div>
   </div>
 </aside>
 
@@ -233,7 +233,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.4.0</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.4.1</span></div>
       <div class="aboutrow"><span>性质</span><span>第三方客户端</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT · 免费开源</span></div>
       <div class="aboutrow"><span>密钥</span><span>不托管 · 仅存本机</span></div>
@@ -319,28 +319,22 @@
     <div class="gauge" id="gauge">
       <svg viewBox="0 0 240 150" id="gaugeSvg">
         <defs>
-          <linearGradient id="gGrad" x1="0" y1="0" x2="1" y2="0">
+          <linearGradient id="gGrad" gradientUnits="userSpaceOnUse" x1="24" y1="0" x2="216" y2="0">
             <stop offset="0%" stop-color="#6b7385"/>
             <stop offset="34%" stop-color="#2fd3c0"/>
             <stop offset="67%" stop-color="#4d6bfe"/>
             <stop offset="100%" stop-color="#ff7a45"/>
           </linearGradient>
-          <radialGradient id="gGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#fff" stop-opacity=".9"/>
-            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-          </radialGradient>
         </defs>
-        <path class="g-bg" d="M24 120 A96 96 0 0 1 216 120"/>
-        <path class="g-prog" id="gProg" pathLength="100" d="M24 120 A96 96 0 0 1 216 120"/>
+        <path class="g-base" d="M120 120 L24 120 A96 96 0 0 1 216 120 Z"></path>
+        <path class="g-sector" id="gSector" d=""></path>
         <g id="gTicks"></g>
-        <g class="g-needle" id="gNeedle">
-          <line x1="120" y1="120" x2="120" y2="46"/>
-          <circle cx="120" cy="118" r="6" class="hub"/>
-          <circle cx="120" cy="52" r="3.2" class="tip"/>
-        </g>
+        <line class="g-needle" id="gNeedle" x1="120" y1="120" x2="120" y2="32"></line>
+        <circle class="g-hub" cx="120" cy="120" r="5.5"></circle>
       </svg>
       <div class="g-labels" id="gLabels"></div>
     </div>
+
     <div class="eff-info">
       <div class="eff-name" id="effName">高</div>
       <div class="eff-desc" id="effDesc">默认，日常专用</div>

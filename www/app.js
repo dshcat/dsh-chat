@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.4.0';
+  var APP_VERSION = '3.4.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1850,16 +1850,28 @@
     var gauge = $('gauge');
     if (gauge) {
       gauge.style.setProperty('--lv', col);
+      var sector = $('gSector');
+      if (sector) sector.setAttribute('d', gaugeSectorPath(i));
+      var ang = i * 60 * Math.PI / 180;
       var needle = $('gNeedle');
-      if (needle) needle.setAttribute('transform', 'rotate(' + (i * 60 - 90) + ' 120 120)');
-      var prog = $('gProg');
-      if (prog) prog.style.strokeDashoffset = String(100 - (i / 3) * 100);
+      if (needle) {
+        needle.setAttribute('x2', (120 - 88 * Math.cos(ang)).toFixed(1));
+        needle.setAttribute('y2', (120 - 88 * Math.sin(ang)).toFixed(1));
+      }
       var labels = $('gLabels').querySelectorAll('span');
       for (var k = 0; k < labels.length; k++) labels[k].classList.toggle('on', k === i);
       var nm = $('effName'), ds = $('effDesc');
       if (nm) { nm.textContent = EFFORTS[i].t; nm.style.color = col; }
       if (ds) ds.textContent = EFFORTS[i].d;
     }
+  }
+
+  function gaugeSectorPath(i) {
+    if (i <= 0) return '';
+    var sweep = i * 60 * Math.PI / 180;
+    var x = 120 - 96 * Math.cos(sweep);
+    var y = 120 - 96 * Math.sin(sweep);
+    return 'M120 120 L24 120 A96 96 0 0 1 ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' Z';
   }
 
   function buildGauge() {
