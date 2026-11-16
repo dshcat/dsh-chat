@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.0.1';
+  var APP_VERSION = '3.0.2';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -532,7 +532,9 @@
       h += '<div class="footbar">';
       h += '<span class="fact">' +
         '<button data-act="copy" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
-        '<button data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + '重新生成</button>' +
+        (turn.id === lastTurnId
+          ? '<button data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + '重新生成</button>'
+          : '') +
         '</span>';
       h += answerVersHtml(turn);
       h += '</div></div>';
@@ -572,7 +574,7 @@
   }
 
   /* ---------- 问题跳转条 ---------- */
-  var qpanelOpen = false, activeTurnIdx = 0;
+  var qpanelOpen = false, activeTurnIdx = 0, lastTurnId = null;
 
   function railTurns() {
     var c = activeConv();
@@ -648,6 +650,7 @@
   function renderMessages() {
     var box = $('messages');
     var conv = activeConv();
+    lastTurnId = conv && conv.turns && conv.turns.length ? conv.turns[conv.turns.length - 1].id : null;
     box.innerHTML = '';
     var empty = $('empty');
     if (!conv || !conv.turns.length) {
@@ -735,6 +738,8 @@
       if (t === excludeTurn) return;
       var a = q.answers[Math.min(Math.max(q.activeA || 0, 0), q.answers.length - 1)];
       if (!a) return;
+      var hasContent = (a.blocks && a.blocks.length) || a.text;
+      if (!hasContent) { out.pop(); return; }   // 这一轮没有回答，整轮丢掉，避免 user,user
       if (a.blocks && a.blocks.length) out.push({ role: 'assistant', content: a.blocks });
       else if (a.text) out.push({ role: 'assistant', content: [{ type: 'text', text: a.text }] });
     });
@@ -858,6 +863,9 @@
     function finish() {
       cleanupBlocks(ai);
       if (ai.usage) ai.cost = costOf(ai.usage, s.model);
+      if (!ai.text && !ai.error && !(ai.blocks || []).some(function (b) { return b.type === 'text' && b.text; })) {
+        ai.error = '模型没有返回内容，点重新生成再试一次';
+      }
       if (ai.cost || ai.usage) {
         var dk = dayKey(Date.now());
         state.settings.usageByDay = state.settings.usageByDay || {};
@@ -1714,14 +1722,30 @@
     setTimeout(function () { $('input').focus(); }, 60);
   }
 
-  function openLightbox(src) {
+  function openLightbox(src, list) {
     if (!src) return;
-    $('lightboxImg').src = src;
+    var slides = (list && list.length) ? list : [src];
+    var idx = Math.max(0, slides.indexOf(src));
+    var track = $('lbTrack');
+    track.innerHTML = slides.map(function (u) {
+      return '<div class="lb-slide"><img src="' + u + '" alt=""></div>';
+    }).join('');
+    track.scrollLeft = 0;
+    $('lbCount').textContent = (idx + 1) + ' / ' + slides.length;
     $('lightbox').classList.add('show');
+    requestAnimationFrame(function () {
+      track.scrollLeft = idx * track.clientWidth;
+      $('lbCount').textContent = (idx + 1) + ' / ' + slides.length;
+    });
+    track.onscroll = function () {
+      var i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      i = Math.max(0, Math.min(slides.length - 1, i));
+      $('lbCount').textContent = (i + 1) + ' / ' + slides.length;
+    };
   }
   function closeLightbox() {
     $('lightbox').classList.remove('show');
-    setTimeout(function () { $('lightboxImg').src = ''; }, 200);
+    setTimeout(function () { $('lbTrack').innerHTML = ''; }, 200);
   }
 
   function copyText(txt) {
@@ -1828,7 +1852,13 @@
 
     $('messages').addEventListener('click', function (e) {
       var img = e.target.closest('img[data-full]');
-      if (img) { openLightbox(img.getAttribute('data-full')); return; }
+      if (img) {
+        var strip = img.closest('.uatt');
+        var all = strip ? Array.prototype.slice.call(strip.querySelectorAll('img[data-full]'))
+          .map(function (x) { return x.getAttribute('data-full'); }) : null;
+        openLightbox(img.getAttribute('data-full'), all);
+        return;
+      }
       var t = e.target.closest('[data-act]');
       if (!t) return;
       var act = t.getAttribute('data-act');
@@ -1841,7 +1871,11 @@
       if (act === 'copy') { var a = curA(turn); copyText(a ? a.text : ''); return; }
       if (act === 'copyu') { copyText(curQ(turn).q); return; }
       if (act === 'edit') { openEdit(turn); return; }
-      if (act === 'regen') { regenerate(turn); return; }
+      if (act === 'regen') {
+        if (turn.id !== lastTurnId) { toast('只能重新生成最后一条回答，改前面的请用「编辑」'); return; }
+        regenerate(turn);
+        return;
+      }
       if (act === 'qprev') { switchQ(turn, -1); return; }
       if (act === 'qnext') { switchQ(turn, 1); return; }
       if (act === 'aprev') { switchA(turn, -1); return; }
@@ -2060,7 +2094,11 @@
       rail.addEventListener('pointercancel', function () { dragging = false; rail.classList.remove('active'); });
     })();
 
-    $('lightbox').onclick = closeLightbox;
+    $('lightbox').onclick = function (e) {
+      if (e.target.closest('.lb-slide') || e.target.closest('#lbClose')) return;
+      closeLightbox();
+    };
+    $('lbClose').onclick = closeLightbox;
     $('qpanelClose').onclick = closeQPanel;
     $('qpanelList').addEventListener('click', function (e) {
       var item = e.target.closest('.qitem');

@@ -626,3 +626,25 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .msg.ai .avatar.def{background:#fff;border:1px solid var(--line)}
 .msg.ai .avatar.def img{width:100%;height:100%;object-fit:contain;padding:1px}
 .avp img{width:70%;height:70%;object-fit:contain}
+
+/* 图片浏览：左右滑动切图 */
+.lightbox{display:flex;flex-direction:row;align-items:stretch;justify-content:flex-start;padding:0}
+.lb-track{
+  display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;width:100%;height:100%;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.lb-track::-webkit-scrollbar{display:none}
+.lb-slide{
+  flex:0 0 100%;width:100%;height:100%;scroll-snap-align:center;scroll-snap-stop:always;
+  display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top) + 8px) 6px calc(env(safe-area-inset-bottom) + 8px);
+}
+.lb-slide img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.lb-count{
+  position:absolute;bottom:calc(env(safe-area-inset-bottom) + 18px);left:50%;transform:translateX(-50%);
+  color:rgba(255,255,255,.8);font-size:12px;background:rgba(0,0,0,.5);padding:4px 12px;border-radius:999px;
+  font-variant-numeric:tabular-nums;pointer-events:none;
+}
+.lb-close{
+  position:absolute;top:calc(env(safe-area-inset-top) + 12px);right:14px;width:36px;height:36px;border-radius:50%;
+  background:rgba(255,255,255,.12);color:#fff;font-size:15px;display:grid;place-items:center;
+}
