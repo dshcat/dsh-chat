@@ -39,10 +39,7 @@
 
   <footer class="composer">
     <div class="chips">
-      <div class="effortwrap" id="effortWrap">
-        <span id="effortLabel">推理 高</span>
-        <input type="range" id="effortSlider" min="0" max="3" step="1" value="2">
-      </div>
+      <button class="chip effortchip" id="chipEffort"><span class="effdot" id="effDot"></span><span id="effortLabel">推理 高</span></button>
       <button class="chip" id="chipSearch"><span class="dot"></span>联网</button>
       <button class="ctxring" id="ctxRing" aria-label="上下文用量">
         <svg viewBox="0 0 28 28">
@@ -97,7 +94,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v3.2</div>
+    <div class="ver" id="drawerVer">v3.3</div>
   </div>
 </aside>
 
@@ -236,7 +233,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.2.0</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.3.0</span></div>
       <div class="aboutrow"><span>性质</span><span>第三方客户端</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT · 免费开源</span></div>
       <div class="aboutrow"><span>密钥</span><span>不托管 · 仅存本机</span></div>
@@ -310,9 +307,28 @@
 
 <input type="file" id="cropFile" accept="image/*" style="display:none">
 
-<section class="sheet menu" id="effortSheet">
+<section class="sheet" id="effortSheet">
   <div class="grab"></div>
-  <div class="menu-body" id="effortBody"></div>
+  <div class="sheet-head">
+    <div class="sheet-title">推理等级</div>
+    <button class="iconbtn small" id="btnEffClose" aria-label="关闭">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <div class="eff-stage" id="effStage">
+      <div class="eff-track"><div class="eff-fill" id="effFill"></div></div>
+      <div class="eff-thumb" id="effThumb"></div>
+    </div>
+    <div class="eff-marks" id="effMarks">
+      <span>不思考</span><span>低</span><span>高</span><span>最高</span>
+    </div>
+    <div class="eff-info">
+      <div class="eff-name" id="effName">高</div>
+      <div class="eff-desc" id="effDesc">默认，日常专用</div>
+    </div>
+    <p class="note">等级越高，模型思考越久、越贵；越高不代表越聪明，简单问题用低档反而更准。</p>
+  </div>
 </section>
 
 <section class="sheet menu" id="ctxSheet">

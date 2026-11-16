@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.2.0';
+  var APP_VERSION = '3.3.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1817,51 +1817,63 @@
   }
 
   var EFFORTS = [
-    { v: 'none', t: '关', d: '关闭思考，最快最省' },
+    { v: 'none', t: '不思考', d: '关闭思考，最快最省' },
     { v: 'low', t: '低', d: '简单问题，少量思考' },
-    { v: 'high', t: '高', d: '默认，日常够用' },
-    { v: 'max', t: '最高', d: '难题、复杂推理' }
+    { v: 'high', t: '高', d: '默认，日常专用' },
+    { v: 'max', t: '最高', d: '难题，复杂推理' }
   ];
+  var EFFORT_COLORS = ['#6b7385', '#2fd3c0', '#4d6bfe', '#ff7a45'];
 
   function effortIndex(v) {
     for (var i = 0; i < EFFORTS.length; i++) if (EFFORTS[i].v === v) return i;
     return 2;
   }
   function syncEffortUI() {
-    var ef = state.settings.effort || 'high';
-    var i = effortIndex(ef);
-    var sl = $('effortSlider');
-    if (sl) sl.value = String(i);
+    var i = effortIndex(state.settings.effort || 'high');
+    var col = EFFORT_COLORS[i];
     var lab = $('effortLabel');
     if (lab) {
       var lang = state.settings.lang || 'zh-Hans';
-      if (lang === 'en') lab.textContent = 'Reasoning ' + ['Off', 'Low', 'High', 'Max'][i];
-      else if (lang === 'zh-Hant') lab.textContent = toHant('推理 ' + EFFORTS[i].t);
-      else lab.textContent = '推理 ' + EFFORTS[i].t;
+      var name = EFFORTS[i].t;
+      if (lang === 'en') name = ['Off', 'Low', 'High', 'Max'][i];
+      else if (lang === 'zh-Hant') name = toHant(name);
+      lab.textContent = (lang === 'en' ? 'Reasoning ' : '推理 ') + name;
     }
-    var wrap = $('effortWrap');
-    if (wrap) wrap.classList.toggle('off', ef === 'none');
+    var chip = $('chipEffort');
+    if (chip) {
+      chip.style.setProperty('--lv', col);
+      chip.classList.toggle('on', i > 0);
+    }
+    var dot = $('effDot');
+    if (dot) { dot.style.background = col; dot.style.color = col; }
+
+    var stage = $('effStage');
+    if (stage) {
+      stage.style.setProperty('--lv', col);
+      var pct = (i / 3) * 100;
+      var fill = $('effFill'), thumb = $('effThumb');
+      if (fill) fill.style.width = Math.max(2, pct) + '%';
+      if (thumb) thumb.style.left = pct + '%';
+      var marks = $('effMarks').querySelectorAll('span');
+      for (var k = 0; k < marks.length; k++) marks[k].classList.toggle('on', k === i);
+      var nm = $('effName'), ds = $('effDesc');
+      if (nm) { nm.textContent = EFFORTS[i].t; nm.style.color = col; }
+      if (ds) ds.textContent = EFFORTS[i].d;
+    }
+  }
+
+  function setEffortIndex(i) {
+    i = Math.max(0, Math.min(3, i));
+    if (EFFORTS[i].v === state.settings.effort) return;
+    state.settings.effort = EFFORTS[i].v;
+    state.settings.think = EFFORTS[i].v !== 'none';
+    save();
+    syncEffortUI();
+    haptic();
   }
 
   function openEffort() {
-    var body = $('effortBody');
-    body.innerHTML = '';
-    var cur = state.settings.effort || 'high';
-    EFFORTS.forEach(function (e) {
-      var b = document.createElement('button');
-      b.className = 'menu-item';
-      b.innerHTML = '<span style="flex:1">' + e.t + '<span class="mi-desc">' + e.d + '</span></span>' +
-        (cur === e.v ? '<span class="mi-on">✓</span>' : '');
-      b.onclick = function () {
-        state.settings.effort = e.v;
-        state.settings.think = e.v !== 'none';
-        save(true);
-        updateHeader();
-        closeEffort();
-        haptic();
-      };
-      body.appendChild(b);
-    });
+    syncEffortUI();
     $('effortSheet').classList.add('open');
     $('scrim').classList.add('show');
   }
@@ -2098,14 +2110,30 @@
     $('dlgCancel').onclick = closeAsk;
 
     $('chipSearch').onclick = function () { state.settings.search = !state.settings.search; save(); updateHeader(); haptic(); };
-    $('effortSlider').oninput = function () {
-      var e = EFFORTS[parseInt(this.value, 10)] || EFFORTS[2];
-      state.settings.effort = e.v;
-      state.settings.think = e.v !== 'none';
-      syncEffortUI();
-      save();
-      haptic();
-    };
+    $('chipEffort').onclick = openEffort;
+    $('btnEffClose').onclick = closeEffort;
+    (function () {
+      var stage = $('effStage');
+      if (!stage) return;
+      var dragging = false;
+      function idxAt(clientX) {
+        var r = stage.getBoundingClientRect();
+        if (!r.width) return effortIndex(state.settings.effort || 'high');
+        var pct = (clientX - r.left) / r.width;
+        pct = Math.max(0, Math.min(1, pct));
+        return Math.round(pct * 3);
+      }
+      stage.addEventListener('pointerdown', function (e) {
+        dragging = true;
+        setEffortIndex(idxAt(e.clientX));
+        try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+      stage.addEventListener('pointermove', function (e) {
+        if (dragging) setEffortIndex(idxAt(e.clientX));
+      });
+      stage.addEventListener('pointerup', function () { dragging = false; });
+      stage.addEventListener('pointercancel', function () { dragging = false; });
+    })();
     $('btnConvSet2').onclick = openConvSet;
     $('ctxRing').onclick = openCtx;
     $('btnCtxClose').onclick = closeCtx;

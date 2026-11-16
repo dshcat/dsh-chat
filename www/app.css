@@ -695,3 +695,44 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 }
 .chip.gear{gap:5px;color:var(--dim)}
 .chip.gear svg{stroke-width:2;color:var(--dim2)}
+
+/* ---------- 3.3 推理等级面板 ---------- */
+.effortchip{gap:7px;position:relative}
+.effortchip .effdot{width:7px;height:7px;border-radius:50%;background:#6b7385;box-shadow:0 0 8px currentColor;transition:background .25s}
+.effortchip.on{color:var(--txt);border-color:var(--line2)}
+
+.eff-stage{position:relative;height:52px;display:flex;align-items:center;margin:16px 2px 6px;touch-action:none}
+.eff-track{
+  position:absolute;left:0;right:0;height:8px;border-radius:99px;background:var(--bg3);
+  border:1px solid var(--line);overflow:hidden;
+}
+.eff-fill{
+  position:absolute;left:0;top:0;bottom:0;width:66%;border-radius:99px;
+  background:linear-gradient(90deg, var(--lv, #4d6bfe), var(--lv, #4d6bfe));
+  transition:width .25s cubic-bezier(.3,.7,.3,1);
+}
+@supports (background: color-mix(in srgb, red 50%, white)) {
+  .eff-fill{background:linear-gradient(90deg, color-mix(in srgb, var(--lv, #4d6bfe) 55%, transparent), var(--lv, #4d6bfe));}
+  .eff-thumb{box-shadow:0 0 0 3px var(--bg2), 0 0 16px var(--lv, #4d6bfe), 0 0 34px color-mix(in srgb, var(--lv, #4d6bfe) 55%, transparent);}
+}
+.eff-fill:after{
+  content:"";position:absolute;inset:0;border-radius:99px;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  background-size:60px 100%;background-repeat:no-repeat;animation:flow 2.2s linear infinite;
+}
+@keyframes flow{0%{background-position:-60px 0}100%{background-position:calc(100% + 60px) 0}}
+.eff-thumb{
+  position:absolute;width:26px;height:26px;border-radius:50%;left:66%;transform:translate(-50%,0);
+  background:radial-gradient(circle at 35% 30%, #fff, var(--lv, #4d6bfe) 62%);
+  box-shadow:0 0 0 3px var(--bg2), 0 0 16px var(--lv, #4d6bfe), 0 0 34px color-mix(in srgb, var(--lv, #4d6bfe) 55%, transparent);
+  transition:left .25s cubic-bezier(.3,.7,.3,1), box-shadow .25s, background .25s;
+  pointer-events:none;
+}
+.eff-marks{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim2);margin:2px 2px 0;padding:0 2px}
+.eff-marks span{flex:1;text-align:center}
+.eff-marks span:first-child{text-align:left}
+.eff-marks span:last-child{text-align:right}
+.eff-marks span.on{color:var(--lv, var(--acc));font-weight:600}
+.eff-info{margin:18px 2px 4px;padding:14px 16px;border-radius:14px;background:var(--bg3);border:1px solid var(--line)}
+.eff-name{font-size:15px;font-weight:680;color:var(--lv, var(--txt));margin-bottom:4px}
+.eff-desc{font-size:12.5px;color:var(--dim);line-height:1.6}
