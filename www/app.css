@@ -737,25 +737,50 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .eff-name{font-size:15px;font-weight:680;color:var(--lv, var(--txt));margin-bottom:4px}
 .eff-desc{font-size:12.5px;color:var(--dim);line-height:1.6}
 
-/* ---------- 3.4 半圆扇形推理盘 ---------- */
+/* ---------- 3.5 半圆渐变盘 + 粒子 ---------- */
+@property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
 .gauge{position:relative;width:100%;max-width:330px;margin:8px auto 0;touch-action:none}
-.gauge svg{width:100%;height:auto;display:block;overflow:visible}
-.g-base{fill:var(--bg3);stroke:var(--line);stroke-width:1}
-.g-sector{fill:url(#gFill);stroke:none;transition:opacity .2s}
-.g-sheen{fill:url(#gSheen);stroke:none;pointer-events:none}
-.g-trail{
-  fill:rgba(255,255,255,.55);stroke:none;pointer-events:none;
-  filter:blur(6px);animation:trailPulse 2.6s ease-in-out infinite;
+.gauge svg{position:relative;width:100%;height:auto;display:block;overflow:visible;z-index:2}
+
+.g-dome{
+  position:absolute;left:10%;top:16%;width:80%;height:64%;z-index:1;
+  border-radius:50% 50% 0 0;
+  background:conic-gradient(from 270deg at 50% 100%,
+    rgba(107,115,133,0) 0deg,
+    rgba(107,115,133,.14) 26deg,
+    rgba(47,211,192,.55) 56deg,
+    #2fd3c0 84deg,
+    #4d6bfe 108deg,
+    #7c5cff 132deg,
+    #a855f7 152deg,
+    #ff5a3c 180deg,
+    transparent 180.02deg);
+  mask-image:radial-gradient(circle at 50% 100%, #000 96%, transparent 97%);
+  -webkit-mask-image:radial-gradient(circle at 50% 100%, #000 96%, transparent 97%);
 }
-@keyframes trailPulse{
-  0%,100%{opacity:.28}
-  50%{opacity:.75}
+.g-flow{
+  position:absolute;left:10%;top:16%;width:80%;height:64%;z-index:1;pointer-events:none;
+  border-radius:50% 50% 0 0;overflow:hidden;mix-blend-mode:soft-light;
+  background:conic-gradient(from var(--spin) at 50% 100%,
+    transparent 0deg, rgba(255,255,255,.55) 45deg, transparent 95deg, transparent 360deg);
+  animation:spin 6.5s linear infinite;
 }
+@keyframes spin{to{--spin:360deg}}
+
 .g-needle{stroke:var(--txt);stroke-width:2.4;stroke-linecap:round;opacity:.92}
-.g-tip{fill:#fff;filter:drop-shadow(0 0 6px var(--lv, #4d6bfe)) drop-shadow(0 0 12px var(--lv, #4d6bfe))}
+.g-tip{fill:#fff;filter:drop-shadow(0 0 6px var(--lv, #4d6bfe)) drop-shadow(0 0 14px var(--lv, #4d6bfe))}
 .g-hub{fill:var(--bg2);stroke:var(--txt);stroke-width:2.4}
-.g-ticks line{stroke:rgba(255,255,255,.55);stroke-width:2.2;stroke-linecap:round}
-.g-labels{position:absolute;inset:0;pointer-events:none}
+.g-ticks line{stroke:rgba(255,255,255,.7);stroke-width:2.2;stroke-linecap:round}
+
+.g-pt{fill:#fff;pointer-events:none;animation:ptOut 1.15s cubic-bezier(.2,.55,.3,1) forwards}
+@keyframes ptOut{
+  0%{transform:translate(0,0);opacity:.95}
+  70%{opacity:.5}
+  100%{transform:translate(var(--dx,0),var(--dy,0));opacity:0}
+}
+
+.g-labels{position:absolute;inset:0;pointer-events:none;z-index:3}
 .g-labels span{
   position:absolute;transform:translate(-50%,-50%);font-size:11.5px;color:var(--dim2);
   white-space:nowrap;transition:color .2s;

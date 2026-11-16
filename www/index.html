@@ -94,7 +94,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v3.42</div>
+    <div class="ver" id="drawerVer">v3.5</div>
   </div>
 </aside>
 
@@ -233,7 +233,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.4.2</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.5.0</span></div>
       <div class="aboutrow"><span>性质</span><span>第三方客户端</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT · 免费开源</span></div>
       <div class="aboutrow"><span>密钥</span><span>不托管 · 仅存本机</span></div>
@@ -317,23 +317,11 @@
   </div>
   <div class="sheet-body">
     <div class="gauge" id="gauge">
+      <div class="g-dome"></div>
+      <div class="g-flow"></div>
       <svg viewBox="0 0 240 150" id="gaugeSvg">
-        <defs>
-          <radialGradient id="gFill" gradientUnits="userSpaceOnUse" cx="120" cy="120" r="104">
-            <stop offset="0%" stop-color="var(--lv, #4d6bfe)" stop-opacity="1"/>
-            <stop offset="55%" stop-color="var(--lv, #4d6bfe)" stop-opacity=".88"/>
-            <stop offset="100%" stop-color="var(--lv2, #ff7a45)" stop-opacity=".7"/>
-          </radialGradient>
-          <radialGradient id="gSheen" gradientUnits="userSpaceOnUse" cx="120" cy="128" r="70">
-            <stop offset="0%" stop-color="#fff" stop-opacity=".22"/>
-            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-          </radialGradient>
-        </defs>
-        <path class="g-base" d="M120 120 L24 120 A96 96 0 0 1 216 120 Z"></path>
-        <path class="g-sector" id="gSector" d=""></path>
-        <path class="g-sheen" id="gSheen" d=""></path>
-        <path class="g-trail" id="gTrail" d=""></path>
         <g id="gTicks"></g>
+        <g id="gParts"></g>
         <line class="g-needle" id="gNeedle" x1="120" y1="120" x2="120" y2="32"></line>
         <circle class="g-tip" id="gTip" cx="120" cy="32" r="3.6"></circle>
         <circle class="g-hub" cx="120" cy="120" r="5.5"></circle>

@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.4.2';
+  var APP_VERSION = '3.5.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1851,13 +1851,6 @@
     if (gauge) {
       gauge.style.setProperty('--lv', col);
       gauge.style.setProperty('--lv2', EFFORT_COLORS[Math.min(3, i + 1)]);
-      var d = gaugeSectorPath(i);
-      var sector = $('gSector');
-      if (sector) sector.setAttribute('d', d);
-      var sheen = $('gSheen');
-      if (sheen) sheen.setAttribute('d', d);
-      var trail = $('gTrail');
-      if (trail) trail.setAttribute('d', gaugeTrailPath(i));
       var ang = i * 60 * Math.PI / 180;
       var nx = (120 - 88 * Math.cos(ang)).toFixed(1);
       var ny = (120 - 88 * Math.sin(ang)).toFixed(1);
@@ -1881,15 +1874,46 @@
     return 'M120 120 L24 120 A96 96 0 0 1 ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' Z';
   }
 
-  function gaugeTrailPath(i) {
-    if (i <= 0) return '';
-    var r = 90;
-    var a1 = i * 60 * Math.PI / 180;
-    var a2 = Math.max(0, i * 60 - 11) * Math.PI / 180;
-    var x1 = 120 - r * Math.cos(a1), y1 = 120 - r * Math.sin(a1);
-    var x2 = 120 - r * Math.cos(a2), y2 = 120 - r * Math.sin(a2);
-    return 'M120 120 L' + x1.toFixed(1) + ' ' + y1.toFixed(1) +
-      ' A' + r + ' ' + r + ' 0 0 1 ' + x2.toFixed(1) + ' ' + y2.toFixed(1) + ' Z';
+  var partTimer = null;
+
+  function spawnParticles() {
+    var layer = $('gParts');
+    if (!layer) return;
+    var i = effortIndex(state.settings.effort || 'high');
+    if (i <= 0) return;
+    var ang = i * 60 * Math.PI / 180;
+    for (var k = 0; k < 2; k++) {
+      var r0 = 24 + Math.random() * 36;
+      var a = ang + (Math.random() * 0.22 - 0.11);
+      var x = 120 - r0 * Math.cos(a);
+      var y = 120 - r0 * Math.sin(a);
+      var dist = 34 + Math.random() * 38;
+      var dir = a + 0.85 + Math.random() * 0.25;
+      var dx = (Math.cos(dir) * dist).toFixed(1);
+      var dy = (-Math.sin(dir) * dist).toFixed(1);
+      var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', x.toFixed(1));
+      c.setAttribute('cy', y.toFixed(1));
+      c.setAttribute('r', (1 + Math.random() * 1.9).toFixed(1));
+      c.setAttribute('class', 'g-pt');
+      c.style.setProperty('--dx', dx + 'px');
+      c.style.setProperty('--dy', dy + 'px');
+      c.style.opacity = String(0.5 + Math.random() * 0.5);
+      layer.appendChild(c);
+      setTimeout(function (node) {
+        return function () { if (node.parentNode) node.parentNode.removeChild(node); };
+      }(c), 1300);
+    }
+  }
+
+  function startParticles() {
+    stopParticles();
+    partTimer = setInterval(spawnParticles, 140);
+  }
+  function stopParticles() {
+    if (partTimer) { clearInterval(partTimer); partTimer = null; }
+    var layer = $('gParts');
+    if (layer) layer.innerHTML = '';
   }
 
   function buildGauge() {
@@ -1931,8 +1955,10 @@
     syncEffortUI();
     $('effortSheet').classList.add('open');
     $('scrim').classList.add('show');
+    startParticles();
   }
   function closeEffort() {
+    stopParticles();
     $('effortSheet').classList.remove('open');
     if (!$('sheet').classList.contains('open') && !$('convMenu').classList.contains('open')) $('scrim').classList.remove('show');
   }
