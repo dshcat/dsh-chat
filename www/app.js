@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.5.0';
+  var APP_VERSION = '2.5.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -1088,28 +1088,121 @@
     });
   }
 
+  var convQuery = '';
+
+  function escRe(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function snippetHtml(text, q) {
+    var i = text.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return esc(text.slice(0, 60));
+    var start = Math.max(0, i - 22);
+    var end = Math.min(text.length, i + q.length + 46);
+    var part = (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+    var safe = esc(part);
+    try {
+      return safe.replace(new RegExp('(' + escRe(esc(q)) + ')', 'ig'), '<mark>$1</mark>');
+    } catch (e) { return safe; }
+  }
+
+  function convHits(c, q) {
+    var hits = [];
+    var lower = q.toLowerCase();
+    function scan(text, who) {
+      if (!text || hits.length >= 3) return;
+      if (String(text).toLowerCase().indexOf(lower) < 0) return;
+      hits.push({ who: who, html: snippetHtml(String(text), q) });
+    }
+    scan(c.title, '标题');
+    (c.turns || []).forEach(function (t) {
+      (t.questions || []).forEach(function (qu) {
+        scan(qu.q, '提问');
+        (qu.answers || []).forEach(function (a) { scan(a.text, '回答'); });
+      });
+    });
+    return hits;
+  }
+
+  function dayGroup(ts) {
+    var d = new Date(ts || 0), now = new Date();
+    var k = dayKey(d.getTime());
+    if (k === dayKey(now.getTime())) return '今天';
+    if (k === dayKey(now.getTime() - 86400000)) return '昨天';
+    if (now.getTime() - d.getTime() < 7 * 86400000) return '近 7 天';
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) return '本月';
+    return '更早';
+  }
+
+  function convRow(c, hits) {
+    var d = document.createElement('div');
+    d.className = 'conv' + (c.id === state.activeId ? ' active' : '') + (hits ? ' hit' : '');
+    d.dataset.cid = c.id;
+    var badges = '';
+    if (c.pinned) badges += '<span class="fav">' + ICON.pin + '置顶</span>';
+    if (c.fav) badges += '<span class="fav">' + ICON.star + '收藏</span>';
+
+    var sub;
+    if (hits && hits.length) {
+      sub = hits.map(function (h) {
+        return '<div class="conv-snip"><span class="who">' + h.who + '</span>' + h.html + '</div>';
+      }).join('');
+    } else {
+      sub = '<div class="conv-sub">' + (c.turns ? c.turns.length : 0) + ' 条提问' + (badges ? ' · ' + badges : '') + '</div>';
+    }
+    d.innerHTML = '<div class="conv-main"><div class="conv-title">' + esc(c.title || '新对话') + '</div>' + sub + '</div>' +
+      '<button class="more" data-act="more" data-cid="' + c.id + '" aria-label="更多">⋯</button>';
+    return d;
+  }
+
   function renderConvList() {
     var box = $('convlist');
     box.innerHTML = '';
+    var q = convQuery.trim();
+
+    if (q) {
+      var matched = [];
+      sortedConvs().forEach(function (c) {
+        var hits = convHits(c, q);
+        if (hits.length) matched.push({ c: c, hits: hits });
+      });
+      if (!matched.length) {
+        box.innerHTML = '<div class="search-none">没有找到「' + esc(q) + '」<br>试试更短的词</div>';
+        return;
+      }
+      matched.forEach(function (m) { box.appendChild(convRow(m.c, m.hits)); });
+      return;
+    }
+
     if (!state.conversations.length) { box.innerHTML = '<div class="none">还没有对话</div>'; return; }
+
+    var pinned = [], groups = {}, order = ['今天', '昨天', '近 7 天', '本月', '更早'];
     sortedConvs().forEach(function (c) {
-      var d = document.createElement('div');
-      d.className = 'conv' + (c.id === state.activeId ? ' active' : '');
-      d.dataset.cid = c.id;
-      var badges = '';
-      if (c.pinned) badges += '<span class="fav">' + ICON.pin + '置顶</span>';
-      if (c.fav) badges += '<span class="fav">' + ICON.star + '收藏</span>';
-      d.innerHTML =
-        '<div class="conv-main">' +
-        '<div class="conv-title">' + esc(c.title || '新对话') + '</div>' +
-        '<div class="conv-sub">' + (c.turns ? c.turns.length : 0) + ' 条提问' + (badges ? ' · ' + badges : '') + '</div>' +
-        '</div>' +
-        '<button class="more" data-act="more" data-cid="' + c.id + '" aria-label="更多">⋯</button>';
-      box.appendChild(d);
+      if (c.pinned) { pinned.push(c); return; }
+      var g = dayGroup(c.updatedAt);
+      (groups[g] = groups[g] || []).push(c);
+    });
+
+    if (pinned.length) {
+      var pg = document.createElement('div');
+      pg.className = 'convg';
+      pg.textContent = '置顶';
+      box.appendChild(pg);
+      pinned.forEach(function (c) { box.appendChild(convRow(c, null)); });
+    }
+    order.forEach(function (g) {
+      if (!groups[g] || !groups[g].length) return;
+      var gh = document.createElement('div');
+      gh.className = 'convg';
+      gh.textContent = g;
+      box.appendChild(gh);
+      groups[g].forEach(function (c) { box.appendChild(convRow(c, null)); });
     });
   }
 
-  function openDrawer() { renderConvList(); $('drawer').classList.add('open'); $('scrim').classList.add('show'); }
+  function openDrawer() {
+    convQuery = '';
+    var si = $('convSearch');
+    if (si) { si.value = ''; document.querySelector('.drawer-search').classList.remove('has'); }
+    renderConvList(); $('drawer').classList.add('open'); $('scrim').classList.add('show'); }
   function closeDrawer() { $('drawer').classList.remove('open'); $('scrim').classList.remove('show'); }
   function openSheet() {
     fillSheet();
@@ -1529,6 +1622,18 @@
 
   /* ---------- 事件 ---------- */
   function bind() {
+    $('convSearch').oninput = function () {
+      convQuery = this.value;
+      document.querySelector('.drawer-search').classList.toggle('has', !!this.value);
+      clearTimeout(window.__sq);
+      window.__sq = setTimeout(renderConvList, 120);
+    };
+    $('btnSearchClear').onclick = function () {
+      var el = $('convSearch');
+      el.value = ''; convQuery = '';
+      document.querySelector('.drawer-search').classList.remove('has');
+      renderConvList();
+    };
     $('btnMenu').onclick = openDrawer;
     $('btnCloseDrawer').onclick = closeDrawer;
     $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); closeCrop(); };

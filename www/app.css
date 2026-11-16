@@ -512,3 +512,28 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
   background:var(--bg3);border:1px solid var(--line);display:grid;place-items:center;background-size:cover;background-position:center;
 }
 .uavatar svg{width:15px;height:15px;fill:var(--dim2);stroke:none}
+
+/* ---------- 2.5.1 抽屉搜索与日期分组 ---------- */
+.drawer-search{
+  display:flex;align-items:center;gap:8px;margin:8px 14px 4px;padding:9px 12px;border-radius:13px;
+  background:var(--bg3);border:1px solid var(--line);
+}
+.drawer-search svg{width:16px;height:16px;color:var(--dim2);flex:0 0 auto}
+.drawer-search input{
+  flex:1;min-width:0;background:none;border:0;font-size:13.5px;color:var(--txt);
+}
+.drawer-search input::placeholder{color:var(--dim2)}
+.drawer-search input::-webkit-search-cancel-button{display:none}
+.drawer-search .sclear{color:var(--dim2);font-size:13px;padding:2px 4px;display:none}
+.drawer-search.has .sclear{display:block}
+
+.convg{
+  font-size:10.5px;color:var(--dim2);font-weight:700;letter-spacing:.08em;
+  padding:14px 12px 6px;text-transform:uppercase;
+}
+.convg:first-child{padding-top:6px}
+.conv-snip{font-size:11.5px;color:var(--dim2);line-height:1.5;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.conv-snip .who{color:var(--dim3,var(--dim2));opacity:.8;margin-right:4px}
+.conv-snip mark{background:rgba(77,107,254,.28);color:var(--txt);border-radius:3px;padding:0 1px}
+.conv.hit .conv-title{color:var(--acc2)}
+.search-none{color:var(--dim2);font-size:12.5px;text-align:center;padding:36px 10px;line-height:1.7}
