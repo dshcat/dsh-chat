@@ -745,7 +745,7 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 
 .g-dome{
   position:absolute;left:10%;top:16%;width:80%;height:64%;z-index:1;
-  border-radius:50% 50% 0 0;
+  border-radius:50% 50% 0 0 / 100% 100% 0 0;
   background:conic-gradient(from 270deg at 50% 100%,
     rgba(107,115,133,0) 0deg,
     rgba(107,115,133,.14) 26deg,
@@ -761,7 +761,7 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 }
 .g-flow{
   position:absolute;left:10%;top:16%;width:80%;height:64%;z-index:1;pointer-events:none;
-  border-radius:50% 50% 0 0;overflow:hidden;mix-blend-mode:soft-light;
+  border-radius:50% 50% 0 0 / 100% 100% 0 0;overflow:hidden;mix-blend-mode:soft-light;opacity:.7;
   background:conic-gradient(from var(--spin) at 50% 100%,
     transparent 0deg, rgba(255,255,255,.55) 45deg, transparent 95deg, transparent 360deg);
   animation:spin 6.5s linear infinite;

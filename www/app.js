@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.5.0';
+  var APP_VERSION = '3.5.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1823,6 +1823,30 @@
     { v: 'max', t: '最高', d: '难题，复杂推理' }
   ];
   var EFFORT_COLORS = ['#6b7385', '#2fd3c0', '#4d6bfe', '#ff7a45'];
+  var GAUGE_STOPS = [
+    { p: 0.00, c: [107, 115, 133] },
+    { p: 0.18, c: [96, 150, 156] },
+    { p: 0.33, c: [47, 211, 192] },
+    { p: 0.50, c: [77, 107, 254] },
+    { p: 0.70, c: [124, 92, 255] },
+    { p: 0.86, c: [168, 85, 247] },
+    { p: 1.00, c: [255, 90, 60] }
+  ];
+
+  function gaugeColorAt(p) {
+    p = Math.max(0, Math.min(1, p));
+    for (var i = 0; i < GAUGE_STOPS.length - 1; i++) {
+      var a = GAUGE_STOPS[i], b = GAUGE_STOPS[i + 1];
+      if (p >= a.p && p <= b.p) {
+        var t = (p - a.p) / Math.max(0.0001, b.p - a.p);
+        return 'rgb(' + Math.round(a.c[0] + (b.c[0] - a.c[0]) * t) + ',' +
+          Math.round(a.c[1] + (b.c[1] - a.c[1]) * t) + ',' +
+          Math.round(a.c[2] + (b.c[2] - a.c[2]) * t) + ')';
+      }
+    }
+    var last = GAUGE_STOPS[GAUGE_STOPS.length - 1].c;
+    return 'rgb(' + last[0] + ',' + last[1] + ',' + last[2] + ')';
+  }
 
   function effortIndex(v) {
     for (var i = 0; i < EFFORTS.length; i++) if (EFFORTS[i].v === v) return i;
@@ -1830,7 +1854,7 @@
   }
   function syncEffortUI() {
     var i = effortIndex(state.settings.effort || 'high');
-    var col = EFFORT_COLORS[i];
+    var col = gaugeColorAt(i / 3);
     var lab = $('effortLabel');
     if (lab) {
       var lang = state.settings.lang || 'zh-Hans';
@@ -1898,7 +1922,8 @@
       c.setAttribute('class', 'g-pt');
       c.style.setProperty('--dx', dx + 'px');
       c.style.setProperty('--dy', dy + 'px');
-      c.style.opacity = String(0.5 + Math.random() * 0.5);
+      c.setAttribute('fill', gaugeColorAt(i / 3));
+      c.style.opacity = String(0.55 + Math.random() * 0.45);
       layer.appendChild(c);
       setTimeout(function (node) {
         return function () { if (node.parentNode) node.parentNode.removeChild(node); };
