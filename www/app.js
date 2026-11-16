@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.3.0';
+  var APP_VERSION = '3.4.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1847,18 +1847,43 @@
     var dot = $('effDot');
     if (dot) { dot.style.background = col; dot.style.color = col; }
 
-    var stage = $('effStage');
-    if (stage) {
-      stage.style.setProperty('--lv', col);
-      var pct = (i / 3) * 100;
-      var fill = $('effFill'), thumb = $('effThumb');
-      if (fill) fill.style.width = Math.max(2, pct) + '%';
-      if (thumb) thumb.style.left = pct + '%';
-      var marks = $('effMarks').querySelectorAll('span');
-      for (var k = 0; k < marks.length; k++) marks[k].classList.toggle('on', k === i);
+    var gauge = $('gauge');
+    if (gauge) {
+      gauge.style.setProperty('--lv', col);
+      var needle = $('gNeedle');
+      if (needle) needle.setAttribute('transform', 'rotate(' + (i * 60 - 90) + ' 120 120)');
+      var prog = $('gProg');
+      if (prog) prog.style.strokeDashoffset = String(100 - (i / 3) * 100);
+      var labels = $('gLabels').querySelectorAll('span');
+      for (var k = 0; k < labels.length; k++) labels[k].classList.toggle('on', k === i);
       var nm = $('effName'), ds = $('effDesc');
       if (nm) { nm.textContent = EFFORTS[i].t; nm.style.color = col; }
       if (ds) ds.textContent = EFFORTS[i].d;
+    }
+  }
+
+  function buildGauge() {
+    var ticks = $('gTicks'), labels = $('gLabels');
+    if (!ticks || ticks.childNodes.length) return;
+    var NS = 'http://www.w3.org/2000/svg';
+    var names = ['不思考', '低', '高', '最高'];
+    for (var i = 0; i < 4; i++) {
+      var ang = (i * 60) * Math.PI / 180;
+      var cos = Math.cos(ang), sin = Math.sin(ang);
+      var ln = document.createElementNS(NS, 'line');
+      ln.setAttribute('x1', (120 - 97 * cos).toFixed(1));
+      ln.setAttribute('y1', (120 - 97 * sin).toFixed(1));
+      ln.setAttribute('x2', (120 - 85 * cos).toFixed(1));
+      ln.setAttribute('y2', (120 - 85 * sin).toFixed(1));
+      ticks.appendChild(ln);
+
+      var sp = document.createElement('span');
+      sp.textContent = names[i];
+      var lx = 120 - 113 * cos;
+      var ly = 120 - 113 * sin + (i === 0 || i === 3 ? 10 : 0);
+      sp.style.left = (lx / 240 * 100) + '%';
+      sp.style.top = (ly / 150 * 100) + '%';
+      labels.appendChild(sp);
     }
   }
 
@@ -2113,26 +2138,29 @@
     $('chipEffort').onclick = openEffort;
     $('btnEffClose').onclick = closeEffort;
     (function () {
-      var stage = $('effStage');
-      if (!stage) return;
+      var svg = $('gaugeSvg');
+      if (!svg) return;
       var dragging = false;
-      function idxAt(clientX) {
-        var r = stage.getBoundingClientRect();
+      function idxAt(clientX, clientY) {
+        var r = svg.getBoundingClientRect();
         if (!r.width) return effortIndex(state.settings.effort || 'high');
-        var pct = (clientX - r.left) / r.width;
-        pct = Math.max(0, Math.min(1, pct));
-        return Math.round(pct * 3);
+        var cx = r.left + r.width * 0.5;
+        var cy = r.top + r.height * (120 / 150);
+        var ang = Math.atan2(cy - clientY, clientX - cx) * 180 / Math.PI;
+        if (ang < 0) ang = clientX >= cx ? 0 : 180;
+        ang = Math.max(0, Math.min(180, ang));
+        return Math.round((180 - ang) / 60);
       }
-      stage.addEventListener('pointerdown', function (e) {
+      svg.addEventListener('pointerdown', function (e) {
         dragging = true;
-        setEffortIndex(idxAt(e.clientX));
-        try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+        setEffortIndex(idxAt(e.clientX, e.clientY));
+        try { svg.setPointerCapture(e.pointerId); } catch (err) {}
       });
-      stage.addEventListener('pointermove', function (e) {
-        if (dragging) setEffortIndex(idxAt(e.clientX));
+      svg.addEventListener('pointermove', function (e) {
+        if (dragging) setEffortIndex(idxAt(e.clientX, e.clientY));
       });
-      stage.addEventListener('pointerup', function () { dragging = false; });
-      stage.addEventListener('pointercancel', function () { dragging = false; });
+      svg.addEventListener('pointerup', function () { dragging = false; });
+      svg.addEventListener('pointercancel', function () { dragging = false; });
     })();
     $('btnConvSet2').onclick = openConvSet;
     $('ctxRing').onclick = openCtx;
@@ -2535,6 +2563,7 @@
       if (q) state.settings.base = q;
     } catch (e) {}
     bind();
+    buildGauge();
     applyTheme();
     applyLang();
     renderMessages();
