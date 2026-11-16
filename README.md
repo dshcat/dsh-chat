@@ -1,4 +1,4 @@
-# DeepChat
+# DSChat
 
 一个给自己用的 Android 版 DeepSeek 客户端：WebView 壳 + 纯静态前端，无后端、无账号、无埋点。
 **非官方项目**，与深度求索（DeepSeek）公司无任何隶属、合作或授权关系。
@@ -54,7 +54,7 @@
 
 ## 安装
 
-1. 下载 `DeepChat-2.4.2.apk`
+1. 下载 `DSChat-3.0.0.apk`
 2. 点开安装，允许一次「未知来源」
 3. 打开 → 左上角 ☰ → 设置 → 填 API Key（[platform.deepseek.com](https://platform.deepseek.com) 申请）
 
@@ -78,7 +78,7 @@ JSON 存到手机「下载」目录（不含 API Key）；「恢复备份」可�
 ## 自己编译
 
 ```bash
-bash build.sh      # 产出 DeepChat-2.4.2.apk
+bash build.sh      # 产出 DSChat-3.0.0.apk
 ```
 
 依赖：JDK 17、Android build-tools 34 的 `lib/d8.jar` 与 `lib/apksigner.jar`、

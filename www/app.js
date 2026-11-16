@@ -1,11 +1,11 @@
-/* DeepChat 2.2 — 自用 / 可公开分发的移动端 DeepSeek 客户端
+/* DSChat — 自用 / 可公开分发的移动端 DeepSeek 客户端
  * 问题版本与回答版本分开管理；对话可置顶、收藏；编辑不丢历史。 */
 (function () {
   'use strict';
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.8.0';
+  var APP_VERSION = '3.0.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -469,11 +469,11 @@
     var av = state.settings.avatar || {};
     var avHtml;
     if (av.ai) avHtml = '<div class="avatar" style="background-image:url(' + av.ai + ')"></div>';
-    else avHtml = '<div class="avatar">' + (ai.streaming && !ai.text ? '<div class="spinner"></div>' : AV_LOGO) + '</div>';
+    else avHtml = '<div class="avatar def">' + (ai.streaming && !ai.text ? '<div class="spinner"></div>' : '<img src="whale.png" alt="">') + '</div>';
 
     var h = '';
     h += '<div class="ai-head">' + avHtml + '<span>' +
-      (ai.streaming ? '正在生成' : 'DeepChat') + '</span></div>';
+      (ai.streaming ? '正在生成' : 'DSChat') + '</span></div>';
 
     if (ai.thinking) {
       h += '<details class="think"' + (ai._thinkOpen ? ' open' : '') + ' data-act="think" data-turn="' + turn.id + '">' +
@@ -1463,7 +1463,7 @@
     }
     if (i) {
       i.style.backgroundImage = a.ai ? 'url(' + a.ai + ')' : '';
-      i.innerHTML = a.ai ? '' : AV_LOGO.replace('<svg', '<svg class="def-ai"');
+      i.innerHTML = a.ai ? '' : '<img src="whale.png" alt="" style="width:70%;height:70%;object-fit:contain">';
     }
   }
 
@@ -1554,7 +1554,7 @@
 
   function exportBackup() {
     var bak = {
-      app: 'DeepChat', version: APP_VERSION, exportedAt: new Date().toISOString(),
+      app: 'DSChat', version: APP_VERSION, exportedAt: new Date().toISOString(),
       settings: (function () {
         var o = JSON.parse(JSON.stringify(state.settings));
         delete o.apiKey;

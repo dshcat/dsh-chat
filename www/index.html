@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#0f1115" id="metaTheme">
-<title>DeepChat</title>
+<title>DSChat</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -29,7 +29,7 @@
     <div id="messages"></div>
     <div id="empty" class="empty">
       <div class="logo">
-        <svg viewBox="0 0 48 48"><path d="M10 12h28a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H24l-8 7v-7h-6a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z"/><circle cx="17" cy="23" r="2.4"/><circle cx="24" cy="23" r="2.4"/><circle cx="31" cy="23" r="2.4"/></svg>
+        <img src="whale.png" alt="">
       </div>
       <h1>晚上好</h1>
       <p class="hint" id="emptyHint">先到设置里填上 API Key，然后随便聊。</p>
@@ -74,7 +74,7 @@
 
 <aside class="drawer" id="drawer">
   <div class="drawer-head">
-    <div class="brand">DeepChat</div>
+    <div class="brand">DSChat</div>
     <button class="iconbtn small" id="btnCloseDrawer" aria-label="关闭">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
@@ -88,7 +88,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v2.8</div>
+    <div class="ver" id="drawerVer">v3.0</div>
   </div>
 </aside>
 
@@ -211,7 +211,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.8.0</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">3.0.0</span></div>
       <div class="aboutrow"><span>性质</span><span>第三方客户端</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT · 免费开源</span></div>
       <div class="aboutrow"><span>密钥</span><span>不托管 · 仅存本机</span></div>
@@ -296,7 +296,7 @@
     <div class="sheet-title">使用前请读一下</div>
   </div>
   <div class="sheet-body agree">
-    <p><b>DeepChat 是一个第三方 API 客户端</b>，只做一件事：把你输入的内容发给你自己的 DeepSeek API Key 对应的官方接口，再把回答显示出来。</p>
+    <p><b>DSChat 是一个第三方 API 客户端</b>，只做一件事：把你输入的内容发给你自己的 DeepSeek API Key 对应的官方接口，再把回答显示出来。</p>
     <ul>
       <li>与深度求索（DeepSeek）<b>没有隶属、合作或授权关系</b>，不是官方应用，也不代表官方立场。</li>
       <li><b>不托管你的 API Key。</b>Key 只存在这台手机上，请求由 App 直接发往 <code>api.deepseek.com</code>。</li>

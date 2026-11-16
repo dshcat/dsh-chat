@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">DeepChat</string>
+    <string name="app_name">DSChat</string>
     <color name="bg">#FF0F1115</color>
-    <color name="icon_bg">#FF0F1115</color>
+    <color name="icon_bg">#FFFFFFFF</color>
 </resources>

@@ -619,3 +619,10 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
   position:absolute;bottom:calc(env(safe-area-inset-bottom) + 18px);left:0;right:0;text-align:center;
   color:rgba(255,255,255,.55);font-size:12px;
 }
+
+/* 品牌图标 */
+.logo{background:#fff;border-color:var(--line)}
+.logo img{width:38px;height:38px;object-fit:contain}
+.msg.ai .avatar.def{background:#fff;border:1px solid var(--line)}
+.msg.ai .avatar.def img{width:100%;height:100%;object-fit:contain;padding:1px}
+.avp img{width:70%;height:70%;object-fit:contain}
