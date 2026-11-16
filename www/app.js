@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.6.0';
+  var APP_VERSION = '2.7.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -571,6 +571,80 @@
     return wrap;
   }
 
+  /* ---------- 问题跳转条 ---------- */
+  var qpanelOpen = false, activeTurnIdx = 0;
+
+  function railTurns() {
+    var c = activeConv();
+    return c && c.turns ? c.turns : [];
+  }
+
+  function turnLabel(t) {
+    var q = curQ(t);
+    var s = q && q.q ? String(q.q).replace(/\s+/g, ' ').trim() : '';
+    if (!s) return (q && q.files && q.files.length) ? '图片/文件' : '空提问';
+    return s.slice(0, 5) + (s.length > 5 ? '…' : '');
+  }
+
+  function updateRail() {
+    var rail = $('qrail');
+    if (!rail) return;
+    rail.classList.toggle('show', railTurns().length >= 3);
+  }
+
+  function renderQPanel() {
+    var list = $('qpanelList');
+    if (!list) return;
+    var turns = railTurns();
+    list.innerHTML = '';
+    turns.forEach(function (t, i) {
+      var b = document.createElement('button');
+      b.className = 'qitem' + (i === activeTurnIdx ? ' active' : '');
+      b.dataset.turn = t.id;
+      b.innerHTML = '<span class="qi-n">' + (i + 1) + '</span>' +
+        '<span class="qi-t">' + esc(turnLabel(t)) + '</span>' +
+        (t.questions.length > 1 ? '<span class="qi-c">' + t.questions.length + ' 版</span>' : '');
+      list.appendChild(b);
+    });
+    var act = list.querySelector('.qitem.active');
+    if (act && act.scrollIntoView) { try { act.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+  }
+
+  function computeActiveTurn() {
+    var turns = document.querySelectorAll('#messages .turn');
+    if (!turns.length) return 0;
+    var sc = $('scroller');
+    var line = sc.getBoundingClientRect().top + 90;
+    var idx = 0;
+    for (var i = 0; i < turns.length; i++) {
+      if (turns[i].getBoundingClientRect().top <= line) idx = i;
+    }
+    return idx;
+  }
+
+  function jumpToTurn(id) {
+    var el = document.querySelector('#messages .turn[data-turn="' + id + '"]');
+    if (!el) return;
+    var sc = $('scroller');
+    var y = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 58;
+    y = Math.max(0, y);
+    if (typeof sc.scrollTo === 'function') sc.scrollTo({ top: y, behavior: 'smooth' });
+    else sc.scrollTop = y;
+  }
+
+  function openQPanel() {
+    qpanelOpen = true;
+    activeTurnIdx = computeActiveTurn();
+    renderQPanel();
+    $('qpanel').classList.add('open');
+    $('qrail').classList.add('open');
+  }
+  function closeQPanel() {
+    qpanelOpen = false;
+    $('qpanel').classList.remove('open');
+    $('qrail').classList.remove('open');
+  }
+
   function renderMessages() {
     var box = $('messages');
     var conv = activeConv();
@@ -596,6 +670,8 @@
         box.appendChild(turnNode(t));
       });
     }
+    closeQPanel();
+    updateRail();
     updateHeader();
   }
 
@@ -1866,10 +1942,66 @@
     $('scroller').addEventListener('scroll', function () {
       var on = $('scroller').scrollTop > 4;
       document.querySelector('.topbar').classList.toggle('scrolled', on);
+      if (qpanelOpen) {
+        var idx = computeActiveTurn();
+        if (idx !== activeTurnIdx) {
+          activeTurnIdx = idx;
+          var items = document.querySelectorAll('#qpanelList .qitem');
+          for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', i === idx);
+        }
+      }
     });
+
+    (function () {
+      var rail = $('qrail');
+      var dragging = false, moved = false, startY = 0;
+      function indexAt(clientY) {
+        var r = rail.getBoundingClientRect();
+        var n = railTurns().length;
+        var ratio = (clientY - r.top) / Math.max(1, r.height);
+        return Math.max(0, Math.min(n - 1, Math.round(ratio * (n - 1))));
+      }
+      rail.addEventListener('pointerdown', function (e) {
+        dragging = true; moved = false; startY = e.clientY;
+        rail.classList.add('active');
+        try { rail.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+      rail.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        if (Math.abs(e.clientY - startY) > 8) {
+          moved = true;
+          var turns = railTurns();
+          var t = turns[indexAt(e.clientY)];
+          if (t) {
+            activeTurnIdx = indexAt(e.clientY);
+            jumpToTurn(t.id);
+          }
+        }
+      });
+      rail.addEventListener('pointerup', function () {
+        dragging = false;
+        rail.classList.remove('active');
+        if (!moved) { if (qpanelOpen) closeQPanel(); else openQPanel(); }
+      });
+      rail.addEventListener('pointercancel', function () { dragging = false; rail.classList.remove('active'); });
+    })();
+
+    $('qpanelClose').onclick = closeQPanel;
+    $('qpanelList').addEventListener('click', function (e) {
+      var item = e.target.closest('.qitem');
+      if (!item) return;
+      jumpToTurn(item.dataset.turn);
+      closeQPanel();
+    });
+    document.addEventListener('pointerdown', function (e) {
+      if (!qpanelOpen) return;
+      if (e.target.closest('#qpanel') || e.target.closest('#qrail')) return;
+      closeQPanel();
+    }, true);
 
     window.__onBack = function () {
       if ($('agreeSheet').classList.contains('open')) { return true; }
+      if (qpanelOpen) { closeQPanel(); return true; }
       if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
       if ($('cropSheet').classList.contains('open')) { closeCrop(); return true; }
       if ($('effortSheet').classList.contains('open')) { closeEffort(); return true; }
