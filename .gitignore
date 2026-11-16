@@ -1,0 +1,8 @@
+sdk/
+build/
+dl/
+test/node_modules/
+*.keystore
+*.apk
+.DS_Store
+*.idsig
