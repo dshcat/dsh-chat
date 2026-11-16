@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.4.1';
+  var APP_VERSION = '3.4.2';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1850,14 +1850,21 @@
     var gauge = $('gauge');
     if (gauge) {
       gauge.style.setProperty('--lv', col);
+      gauge.style.setProperty('--lv2', EFFORT_COLORS[Math.min(3, i + 1)]);
+      var d = gaugeSectorPath(i);
       var sector = $('gSector');
-      if (sector) sector.setAttribute('d', gaugeSectorPath(i));
+      if (sector) sector.setAttribute('d', d);
+      var sheen = $('gSheen');
+      if (sheen) sheen.setAttribute('d', d);
+      var trail = $('gTrail');
+      if (trail) trail.setAttribute('d', gaugeTrailPath(i));
       var ang = i * 60 * Math.PI / 180;
+      var nx = (120 - 88 * Math.cos(ang)).toFixed(1);
+      var ny = (120 - 88 * Math.sin(ang)).toFixed(1);
       var needle = $('gNeedle');
-      if (needle) {
-        needle.setAttribute('x2', (120 - 88 * Math.cos(ang)).toFixed(1));
-        needle.setAttribute('y2', (120 - 88 * Math.sin(ang)).toFixed(1));
-      }
+      if (needle) { needle.setAttribute('x2', nx); needle.setAttribute('y2', ny); }
+      var tip = $('gTip');
+      if (tip) { tip.setAttribute('cx', nx); tip.setAttribute('cy', ny); }
       var labels = $('gLabels').querySelectorAll('span');
       for (var k = 0; k < labels.length; k++) labels[k].classList.toggle('on', k === i);
       var nm = $('effName'), ds = $('effDesc');
@@ -1872,6 +1879,17 @@
     var x = 120 - 96 * Math.cos(sweep);
     var y = 120 - 96 * Math.sin(sweep);
     return 'M120 120 L24 120 A96 96 0 0 1 ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' Z';
+  }
+
+  function gaugeTrailPath(i) {
+    if (i <= 0) return '';
+    var r = 90;
+    var a1 = i * 60 * Math.PI / 180;
+    var a2 = Math.max(0, i * 60 - 11) * Math.PI / 180;
+    var x1 = 120 - r * Math.cos(a1), y1 = 120 - r * Math.sin(a1);
+    var x2 = 120 - r * Math.cos(a2), y2 = 120 - r * Math.sin(a2);
+    return 'M120 120 L' + x1.toFixed(1) + ' ' + y1.toFixed(1) +
+      ' A' + r + ' ' + r + ' 0 0 1 ' + x2.toFixed(1) + ' ' + y2.toFixed(1) + ' Z';
   }
 
   function buildGauge() {

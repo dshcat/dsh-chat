@@ -741,14 +741,20 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .gauge{position:relative;width:100%;max-width:330px;margin:8px auto 0;touch-action:none}
 .gauge svg{width:100%;height:auto;display:block;overflow:visible}
 .g-base{fill:var(--bg3);stroke:var(--line);stroke-width:1}
-.g-sector{
-  fill:url(#gGrad);stroke:none;opacity:.92;
-  transition:opacity .2s;
-  filter:drop-shadow(0 0 10px rgba(77,107,254,.18));
+.g-sector{fill:url(#gFill);stroke:none;transition:opacity .2s}
+.g-sheen{fill:url(#gSheen);stroke:none;pointer-events:none}
+.g-trail{
+  fill:rgba(255,255,255,.55);stroke:none;pointer-events:none;
+  filter:blur(6px);animation:trailPulse 2.6s ease-in-out infinite;
 }
-.g-needle{stroke:var(--txt);stroke-width:2.6;stroke-linecap:round;opacity:.9}
+@keyframes trailPulse{
+  0%,100%{opacity:.28}
+  50%{opacity:.75}
+}
+.g-needle{stroke:var(--txt);stroke-width:2.4;stroke-linecap:round;opacity:.92}
+.g-tip{fill:#fff;filter:drop-shadow(0 0 6px var(--lv, #4d6bfe)) drop-shadow(0 0 12px var(--lv, #4d6bfe))}
 .g-hub{fill:var(--bg2);stroke:var(--txt);stroke-width:2.4}
-.g-ticks line{stroke:var(--bg2);stroke-width:2.4;stroke-linecap:round;opacity:.8}
+.g-ticks line{stroke:rgba(255,255,255,.55);stroke-width:2.2;stroke-linecap:round}
 .g-labels{position:absolute;inset:0;pointer-events:none}
 .g-labels span{
   position:absolute;transform:translate(-50%,-50%);font-size:11.5px;color:var(--dim2);
