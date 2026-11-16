@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.6.1';
+  var APP_VERSION = '3.6.2';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1084,9 +1084,7 @@
 
     function paint() {
       if (!node) return;
-      var stick = nearBottom();
       node.innerHTML = '<div class="body">' + aiInner(turn) + '</div>';
-      if (stick) scrollBottom();
     }
     var raf = 0;
     function paintSoon() {
@@ -1609,6 +1607,24 @@
   }
   function closeEdit() { $('editSheet').classList.remove('open'); $('scrim').classList.remove('show'); state.editing = null; }
 
+  function deleteConv(cid) {
+    state.conversations = state.conversations.filter(function (x) { return x.id !== cid; });
+    if (state.activeId === cid) state.activeId = state.conversations[0] ? state.conversations[0].id : null;
+    save(true);
+    renderMessages();
+    renderConvList();
+    toast('已删除');
+  }
+
+  function askDeleteConv(cid) {
+    var c = findConv(cid);
+    if (!c) return;
+    if (c.fav) { toast('已收藏，先取消收藏才能删除'); return; }
+    ask('删除对话', '「' + (c.title || '新对话') + '」将被永久删除，问题和回答一起删掉，无法恢复。', '删除', true, function () {
+      deleteConv(cid);
+    });
+  }
+
   function openConvMenu(cid) {
     var c = findConv(cid);
     if (!c) return;
@@ -1637,12 +1653,7 @@
     item(ICON.trash, '删除对话', 'danger', !!c.fav, function () {
       if (c.fav) return;
       closeMenu();
-      ask('删除对话', '「' + (c.title || '新对话') + '」将被永久删除，无法恢复。', '删除', true, function () {
-        state.conversations = state.conversations.filter(function (x) { return x.id !== cid; });
-        if (state.activeId === cid) state.activeId = state.conversations[0] ? state.conversations[0].id : null;
-        save(true); renderMessages(); renderConvList();
-        toast('已删除');
-      });
+      askDeleteConv(cid);
     });
 
     if (c.fav) {
@@ -2431,7 +2442,7 @@
           timer = null;
           longPressed = true;
           haptic();
-          openConvMenu(cid);
+          askDeleteConv(cid);
         }, 460);
       });
       box.addEventListener('pointermove', cancel);
