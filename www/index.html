@@ -66,7 +66,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v2.1</div>
+    <div class="ver" id="drawerVer">v2.3</div>
   </div>
 </aside>
 
@@ -154,7 +154,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.1.0</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.3.0</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT</span></div>
       <p class="note">非官方第三方客户端，与深度求索公司无隶属关系。对话由 DeepSeek API 生成，请遵守其服务条款；API 费用由 Key 持有人自行承担。</p>
     </div>
@@ -180,6 +180,22 @@
     </div>
   </div>
 </section>
+
+<section class="sheet menu" id="convMenu">
+  <div class="grab"></div>
+  <div class="menu-body" id="convMenuBody"></div>
+</section>
+
+<div class="dlg-scrim" id="dlgScrim">
+  <div class="dlg">
+    <div class="dlg-title" id="dlgTitle">确认</div>
+    <div class="dlg-msg" id="dlgMsg"></div>
+    <div class="dlg-actions">
+      <button id="dlgCancel">取消</button>
+      <button id="dlgOk">确定</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 <script src="app.js"></script>

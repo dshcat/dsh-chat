@@ -1,11 +1,11 @@
-/* DeepChat 2.1 — 自用 / 可公开分发的移动端 DeepSeek 客户端
- * 每个提问保留全部回答版本，可无限次编辑与重生成，用 ‹ n / m › 来回切。 */
+/* DeepChat 2.2 — 自用 / 可公开分发的移动端 DeepSeek 客户端
+ * 问题版本与回答版本分开管理；对话可置顶、收藏；编辑不丢历史。 */
 (function () {
   'use strict';
 
-  var LS = 'deepchat.v3';
-  var LS_OLD = ['deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.1.0';
+  var LS = 'deepchat.v4';
+  var LS_OLD = ['deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
+  var APP_VERSION = '2.3.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -29,10 +29,13 @@
     link: '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
     retry: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>',
-    edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>'
+    edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>',
+    pin: '<svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 4 4H6l4-4-1-6z"/><path d="M12 14v6"/></svg>',
+    star: '<svg viewBox="0 0 24 24"><path d="M12 4l2.4 5.2 5.6.6-4.2 3.8 1.2 5.4L12 16.2 6.9 19l1.2-5.4L4 9.8l5.6-.6z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>'
   };
 
-  var state = { settings: null, conversations: [], activeId: null, abort: null, streaming: false, editing: null };
+  var state = { settings: null, conversations: [], activeId: null, abort: null, streaming: false, editing: null, menuCid: null };
 
   /* ---------- 存取 ---------- */
   function defaults() {
@@ -53,57 +56,61 @@
     };
   }
 
-  function makeVersion(q, a) {
-    return { q: q || '', ts: Date.now(), a: a || newAi() };
+  function makeQuestion(q, answers) {
+    return { id: uid(), q: q || '', ts: Date.now(), activeA: 0, answers: answers && answers.length ? answers : [newAi()] };
   }
 
   function normalizeTurn(t) {
-    if (Array.isArray(t.versions) && t.versions.length) {
-      t.active = Math.min(t.active || 0, t.versions.length - 1);
+    if (Array.isArray(t.questions) && t.questions.length) {
+      t.questions.forEach(function (q) {
+        q.id = q.id || uid();
+        if (!Array.isArray(q.answers) || !q.answers.length) q.answers = [newAi()];
+        q.activeA = Math.min(Math.max(q.activeA || 0, 0), q.answers.length - 1);
+      });
+      t.activeQ = Math.min(Math.max(t.activeQ || 0, 0), t.questions.length - 1);
       return t;
     }
-    var versions = [];
-    if (Array.isArray(t.variants)) {
-      // v2 结构：user + variants[]
-      var q = (t.user && t.user.content) || '';
-      t.variants.forEach(function (v) {
-        var a = Object.assign(newAi(), v);
-        versions.push({ q: q, ts: v.ts || Date.now(), a: a });
+    var questions = [];
+    if (Array.isArray(t.versions) && t.versions.length) {
+      t.versions.forEach(function (v) {
+        questions.push({ id: uid(), q: v.q || '', activeA: 0, answers: [v.a || newAi()] });
       });
+      t.activeQ = t.active || 0;
+    } else if (Array.isArray(t.variants) && t.variants.length) {
+      questions.push({ id: uid(), q: (t.user && t.user.content) || '', activeA: t.active || 0, answers: t.variants });
+      t.activeQ = 0;
     } else if (t.user) {
-      versions.push(makeVersion(t.user.content, newAi()));
+      questions.push(makeQuestion(t.user.content));
+      t.activeQ = 0;
     }
-    if (!versions.length) versions.push(makeVersion('', newAi()));
-    t.versions = versions;
-    t.active = Math.min(t.active || 0, versions.length - 1);
-    delete t.user; delete t.variants;
+    t.questions = questions.length ? questions : [makeQuestion('')];
+    t.activeQ = Math.min(t.activeQ || 0, t.questions.length - 1);
+    delete t.versions; delete t.variants; delete t.user; delete t.active;
     return t;
   }
 
   function migrate(c) {
     if (!Array.isArray(c.turns)) {
-      // v1：messages[] 平铺
       var turns = [], pending = null;
       (c.messages || []).forEach(function (m) {
         if (m.role === 'user') {
-          pending = { id: uid(), active: 0, versions: [] };
-          pending.versions.push(makeVersion(m.content, newAi()));
+          pending = { id: uid(), activeQ: 0, questions: [makeQuestion(m.content)] };
           turns.push(pending);
         } else if (m.role === 'assistant' && pending) {
-          var a = Object.assign(newAi(), {
+          pending.questions[0].answers[0] = Object.assign(newAi(), {
             ts: m.ts, text: m.text || '', thinking: m.thinking || '', blocks: m.blocks || [],
             sources: m.sources || [], srcIndex: m.srcIndex || {}, tools: m.tools || [],
             usage: m.usage || null, cost: m.cost || 0, error: m.error || null
           });
-          pending.versions[pending.versions.length - 1].a = a;
           pending = null;
         }
       });
       c.turns = turns;
       delete c.messages;
-      return c;
     }
     c.turns.forEach(normalizeTurn);
+    if (!c.pinned) c.pinned = false;
+    if (!c.fav) c.fav = false;
     return c;
   }
 
@@ -124,6 +131,7 @@
       state.activeId = o.activeId || null;
     } catch (e) {}
     if (!state.settings.bg) state.settings.bg = { kind: 'none' };
+    try { if (!localStorage.getItem(LS)) save(true); } catch (e) {}
     if (!state.conversations.length) state.activeId = null;
     if (state.activeId && !findConv(state.activeId)) state.activeId = null;
   }
@@ -153,6 +161,24 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function host(u) { try { return new URL(u).host.replace(/^www\./, ''); } catch (e) { return u || ''; } }
+  function hhmm(ts) {
+    var d = new Date(ts || Date.now());
+    return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+  function dayKey(ts) {
+    var d = new Date(ts || Date.now());
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function dayLabel(ts) {
+    var d = new Date(ts || Date.now());
+    var now = new Date();
+    var k = dayKey(ts), nk = dayKey(now.getTime());
+    var y = new Date(now.getTime() - 86400000);
+    if (k === nk) return '今天';
+    if (k === dayKey(y.getTime())) return '昨天';
+    if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
   function fmtNum(n) { n = n || 0; return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
 
   function isPeak() {
@@ -181,6 +207,19 @@
     t._h = setTimeout(function () { t.classList.remove('show'); }, 1900);
   }
   function haptic() { if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} } }
+
+  /* ---------- 确认框 ---------- */
+  var dlgCb = null;
+  function ask(title, msg, okText, danger, cb) {
+    $('dlgTitle').textContent = title;
+    $('dlgMsg').textContent = msg || '';
+    var ok = $('dlgOk');
+    ok.textContent = okText || '确定';
+    ok.classList.toggle('danger', !!danger);
+    dlgCb = cb;
+    $('dlgScrim').classList.add('show');
+  }
+  function closeAsk() { $('dlgScrim').classList.remove('show'); dlgCb = null; }
 
   /* ---------- 主题 / 背景 ---------- */
   function resolveTheme() {
@@ -354,15 +393,15 @@
     return t.length > 20 ? t.slice(0, 20) + '…' : (t || '新对话');
   }
 
-  function curVersion(turn) {
-    if (!turn.versions || !turn.versions.length) return null;
-    var i = Math.min(Math.max(turn.active || 0, 0), turn.versions.length - 1);
-    return turn.versions[i];
+  function curQ(turn) {
+    if (!turn.questions || !turn.questions.length) return null;
+    var i = Math.min(Math.max(turn.activeQ || 0, 0), turn.questions.length - 1);
+    return turn.questions[i];
   }
-
-  function withAi(turn, fn) {
-    var v = curVersion(turn);
-    if (v && v.a) fn(v.a, v);
+  function curA(turn) {
+    var q = curQ(turn);
+    if (!q) return null;
+    return q.answers[Math.min(Math.max(q.activeA || 0, 0), q.answers.length - 1)];
   }
 
   function sourceAdd(ai, item) {
@@ -388,9 +427,29 @@
     return { icon: 'search', text: '联网工具', title: '' };
   }
 
+  function answerVersHtml(turn) {
+    var q = curQ(turn);
+    if (!q || q.answers.length <= 1) return '';
+    var idx = (q.activeA || 0) + 1;
+    return '<span class="vers">' +
+      '<button data-act="aprev" data-turn="' + turn.id + '"' + (idx <= 1 ? ' disabled' : '') + '>‹</button>' +
+      '<span class="vnum">' + idx + ' / ' + q.answers.length + '</span>' +
+      '<button data-act="anext" data-turn="' + turn.id + '"' + (idx >= q.answers.length ? ' disabled' : '') + '>›</button>' +
+      '</span>';
+  }
+
+  function questionVersHtml(turn) {
+    if (turn.questions.length <= 1) return '';
+    var idx = (turn.activeQ || 0) + 1;
+    return '<span class="qvers">' +
+      '<button data-act="qprev" data-turn="' + turn.id + '"' + (idx <= 1 ? ' disabled' : '') + '>‹</button>' +
+      '<span class="qnum">' + idx + ' / ' + turn.questions.length + '</span>' +
+      '<button data-act="qnext" data-turn="' + turn.id + '"' + (idx >= turn.questions.length ? ' disabled' : '') + '>›</button>' +
+      '</span>';
+  }
+
   function aiInner(turn) {
-    var v = curVersion(turn);
-    var ai = v ? v.a : null;
+    var ai = curA(turn);
     if (!ai) return '<div class="ai-head"><div class="avatar"><div class="spinner"></div></div><span>等待生成</span></div>';
 
     var h = '';
@@ -438,37 +497,42 @@
     }
 
     if (!ai.streaming) {
-      var meta = [];
-      if (ai.usage) meta.push(fmtNum((ai.usage.input_tokens || 0) + (ai.usage.cache_read_input_tokens || 0)) + ' in · ' + fmtNum(ai.usage.output_tokens || 0) + ' out');
-      if (ai.cost) meta.push(money(ai.cost));
+      var u = ai.usage || {};
+      var think = (u.output_tokens_details && u.output_tokens_details.thinking_tokens) || 0;
+      var usageHtml = '';
+      if (ai.usage) {
+        usageHtml =
+          '<span class="usg"><i class="ud hit"></i>命中 ' + fmtNum(u.cache_read_input_tokens || 0) + '</span>' +
+          '<span class="usg"><i class="ud miss"></i>未命中 ' + fmtNum(u.input_tokens || 0) + '</span>' +
+          '<span class="usg"><i class="ud out"></i>输出 ' + fmtNum(u.output_tokens || 0) + '</span>' +
+          (think ? '<span class="usg"><i class="ud think"></i>思考 ' + fmtNum(think) + '</span>' : '') +
+          (ai.cost ? '<span class="usg cost">' + money(ai.cost) + '</span>' : '');
+      }
 
-      var n = (turn.versions || []).length;
-      var idx = (turn.active || 0) + 1;
       h += '<div class="foot">';
-      h += '<span class="fmeta">' + (meta.join(' · ') || '') + '</span>';
+      h += '<div class="usage">' + usageHtml + '</div>';
+      h += '<div class="footbar">';
       h += '<span class="fact">' +
         '<button data-act="copy" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
         '<button data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + '重新生成</button>' +
         '</span>';
-      h += '<span class="vers">' +
-        '<button data-act="vprev" data-turn="' + turn.id + '"' + (idx <= 1 ? ' disabled' : '') + ' aria-label="上一版">‹</button>' +
-        '<span class="vnum">' + idx + ' / ' + n + '</span>' +
-        '<button data-act="vnext" data-turn="' + turn.id + '"' + (idx >= n ? ' disabled' : '') + ' aria-label="下一版">›</button>' +
-        '</span>';
-      h += '</div>';
+      h += answerVersHtml(turn);
+      h += '</div></div>';
     }
     return h;
   }
 
   function turnNode(turn) {
-    var v = curVersion(turn);
+    var q = curQ(turn);
     var wrap = document.createElement('div');
     wrap.className = 'turn';
     wrap.dataset.turn = turn.id;
     wrap.innerHTML =
       '<div class="msg user">' +
-      '<div class="body">' + esc(v ? v.q : '') + '</div>' +
+      '<div class="body">' + esc(q ? q.q : '') + '</div>' +
       '<div class="uact">' +
+      '<span class="utime">' + hhmm(q ? q.ts : Date.now()) + '</span>' +
+      questionVersHtml(turn) +
       '<button data-act="edit" data-turn="' + turn.id + '">' + ICON.edit + '编辑</button>' +
       '<button data-act="copyu" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
       '</div></div>' +
@@ -486,7 +550,20 @@
       renderSuggests();
     } else {
       empty.classList.add('hide');
-      conv.turns.forEach(function (t) { box.appendChild(turnNode(t)); });
+      var lastDay = '';
+      conv.turns.forEach(function (t) {
+        var q = curQ(t);
+        var ts = (q && q.ts) || (t.questions[0] && t.questions[0].ts) || Date.now();
+        var dk = dayKey(ts);
+        if (dk !== lastDay) {
+          var sep = document.createElement('div');
+          sep.className = 'daysep';
+          sep.innerHTML = '<span>' + dayLabel(ts) + '</span>';
+          box.appendChild(sep);
+          lastDay = dk;
+        }
+        box.appendChild(turnNode(t));
+      });
     }
     updateHeader();
   }
@@ -495,7 +572,9 @@
     var t = 0;
     state.conversations.forEach(function (c) {
       (c.turns || []).forEach(function (turn) {
-        (turn.versions || []).forEach(function (v) { if (v.a && v.a.cost) t += v.a.cost; });
+        (turn.questions || []).forEach(function (q) {
+          (q.answers || []).forEach(function (a) { if (a.cost) t += a.cost; });
+        });
       });
     });
     return t;
@@ -526,12 +605,14 @@
   function apiMessages(conv, excludeTurn) {
     var out = [];
     (conv.turns || []).forEach(function (t) {
-      var v = curVersion(t);
-      if (!v) return;
-      out.push({ role: 'user', content: v.q });
+      var q = curQ(t);
+      if (!q) return;
+      out.push({ role: 'user', content: q.q });
       if (t === excludeTurn) return;
-      if (v.a.blocks && v.a.blocks.length) out.push({ role: 'assistant', content: v.a.blocks });
-      else if (v.a.text) out.push({ role: 'assistant', content: [{ type: 'text', text: v.a.text }] });
+      var a = q.answers[Math.min(Math.max(q.activeA || 0, 0), q.answers.length - 1)];
+      if (!a) return;
+      if (a.blocks && a.blocks.length) out.push({ role: 'assistant', content: a.blocks });
+      else if (a.text) out.push({ role: 'assistant', content: [{ type: 'text', text: a.text }] });
     });
     return out;
   }
@@ -601,8 +682,7 @@
 
   function runStream(conv, turn) {
     var s = state.settings;
-    var v = curVersion(turn);
-    var ai = v.a;
+    var ai = curA(turn);
     ai.streaming = true;
 
     state.streaming = true;
@@ -706,7 +786,7 @@
   function ensureConv() {
     var conv = activeConv();
     if (conv) return conv;
-    conv = { id: uid(), title: '新对话', createdAt: Date.now(), updatedAt: Date.now(), turns: [] };
+    conv = { id: uid(), title: '新对话', createdAt: Date.now(), updatedAt: Date.now(), pinned: false, fav: false, turns: [] };
     state.conversations.unshift(conv);
     state.activeId = conv.id;
     return conv;
@@ -719,7 +799,7 @@
     if (state.streaming) return;
 
     var conv = ensureConv();
-    var turn = { id: uid(), active: 0, versions: [makeVersion(text, newAi())] };
+    var turn = { id: uid(), activeQ: 0, questions: [makeQuestion(text)] };
     conv.turns.push(turn);
     if (conv.turns.length === 1) conv.title = convTitleOf(text);
     conv.updatedAt = Date.now();
@@ -734,9 +814,9 @@
     if (!state.settings.apiKey) { openSheet(); return; }
     var conv = activeConv();
     if (!conv) return;
-    var v = curVersion(turn);
-    turn.versions.push(makeVersion(v ? v.q : '', newAi()));
-    turn.active = turn.versions.length - 1;
+    var q = curQ(turn);
+    q.answers.push(newAi());
+    q.activeA = q.answers.length - 1;
     conv.updatedAt = Date.now();
     save(true);
     runStream(conv, turn);
@@ -745,51 +825,129 @@
   function editAndRegenerate(turn, text) {
     var conv = activeConv();
     if (!conv) return;
-    turn.versions.push(makeVersion(text, newAi()));
-    turn.active = turn.versions.length - 1;
+    turn.questions.push(makeQuestion(text));
+    turn.activeQ = turn.questions.length - 1;
     conv.updatedAt = Date.now();
     save(true);
     runStream(conv, turn);
   }
 
-  function switchVersion(turn, delta) {
+  function switchQ(turn, delta) {
     if (state.streaming) { toast('这条还在生成'); return; }
-    var n = turn.versions.length;
-    var i = (turn.active || 0) + delta;
-    if (i < 0 || i >= n) return;
-    turn.active = i;
+    var i = (turn.activeQ || 0) + delta;
+    if (i < 0 || i >= turn.questions.length) return;
+    turn.activeQ = i;
     save(true);
     renderMessages();
     haptic();
   }
 
-  /* ---------- 抽屉 / 面板 ---------- */
+  function switchA(turn, delta) {
+    if (state.streaming) { toast('这条还在生成'); return; }
+    var q = curQ(turn);
+    var i = (q.activeA || 0) + delta;
+    if (i < 0 || i >= q.answers.length) return;
+    q.activeA = i;
+    save(true);
+    renderMessages();
+    haptic();
+  }
+
+  /* ---------- 抽屉 / 菜单 ---------- */
+  function sortedConvs() {
+    return state.conversations.slice().sort(function (a, b) {
+      if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+      return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
+  }
+
   function renderConvList() {
     var box = $('convlist');
     box.innerHTML = '';
     if (!state.conversations.length) { box.innerHTML = '<div class="none">还没有对话</div>'; return; }
-    state.conversations.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (c) {
+    sortedConvs().forEach(function (c) {
       var d = document.createElement('div');
       d.className = 'conv' + (c.id === state.activeId ? ' active' : '');
       d.dataset.cid = c.id;
-      d.innerHTML = '<span class="tt">' + esc(c.title || '新对话') + '</span>' +
-        '<button class="del" data-act="delconv" data-cid="' + c.id + '">✕</button>';
+      var badges = '';
+      if (c.pinned) badges += '<span class="fav">' + ICON.pin + '置顶</span>';
+      if (c.fav) badges += '<span class="fav">' + ICON.star + '收藏</span>';
+      d.innerHTML =
+        '<div class="conv-main">' +
+        '<div class="conv-title">' + esc(c.title || '新对话') + '</div>' +
+        '<div class="conv-sub">' + (c.turns ? c.turns.length : 0) + ' 条提问' + (badges ? ' · ' + badges : '') + '</div>' +
+        '</div>' +
+        '<button class="more" data-act="more" data-cid="' + c.id + '" aria-label="更多">⋯</button>';
       box.appendChild(d);
     });
   }
 
   function openDrawer() { renderConvList(); $('drawer').classList.add('open'); $('scrim').classList.add('show'); }
   function closeDrawer() { $('drawer').classList.remove('open'); $('scrim').classList.remove('show'); }
-  function openSheet() { fillSheet(); $('sheet').classList.add('open'); $('scrim').classList.add('show'); }
+  function openSheet() {
+    fillSheet();
+    $('sheet').classList.add('open');
+    $('scrim').classList.add('show');
+    var body = $('sheet').querySelector('.sheet-body');
+    if (body) body.scrollTop = 0;
+  }
   function closeSheet() { $('sheet').classList.remove('open'); $('scrim').classList.remove('show'); }
   function openEdit(turn) {
     state.editing = turn;
-    $('editText').value = curVersion(turn).q;
+    $('editText').value = curQ(turn).q;
     $('editSheet').classList.add('open');
     $('scrim').classList.add('show');
     setTimeout(function () { $('editText').focus(); }, 150);
   }
   function closeEdit() { $('editSheet').classList.remove('open'); $('scrim').classList.remove('show'); state.editing = null; }
+
+  function openConvMenu(cid) {
+    var c = findConv(cid);
+    if (!c) return;
+    state.menuCid = cid;
+    var body = $('convMenuBody');
+    body.innerHTML = '';
+
+    function item(icon, label, cls, disabled, fn) {
+      var b = document.createElement('button');
+      b.className = 'menu-item' + (cls ? ' ' + cls : '');
+      b.disabled = !!disabled;
+      b.innerHTML = icon + '<span>' + label + '</span>';
+      b.onclick = fn;
+      body.appendChild(b);
+    }
+
+    item(ICON.pin, c.pinned ? '取消置顶' : '置顶对话', '', false, function () {
+      c.pinned = !c.pinned; save(true); renderConvList(); closeMenu(); toast(c.pinned ? '已置顶' : '已取消置顶');
+    });
+    item(ICON.star, c.fav ? '取消收藏' : '收藏对话', '', false, function () {
+      c.fav = !c.fav; save(true); renderConvList(); closeMenu(); toast(c.fav ? '已收藏，需先取消收藏才能删除' : '已取消收藏');
+    });
+
+    var sep = document.createElement('div'); sep.className = 'menu-sep'; body.appendChild(sep);
+
+    item(ICON.trash, '删除对话', 'danger', !!c.fav, function () {
+      if (c.fav) return;
+      closeMenu();
+      ask('删除对话', '「' + (c.title || '新对话') + '」将被永久删除，无法恢复。', '删除', true, function () {
+        state.conversations = state.conversations.filter(function (x) { return x.id !== cid; });
+        if (state.activeId === cid) state.activeId = state.conversations[0] ? state.conversations[0].id : null;
+        save(true); renderMessages(); renderConvList();
+        toast('已删除');
+      });
+    });
+
+    if (c.fav) {
+      var hint = document.createElement('div');
+      hint.className = 'menu-hint';
+      hint.textContent = '已收藏的对话不能删除，先取消收藏。';
+      body.appendChild(hint);
+    }
+
+    $('convMenu').classList.add('open');
+    $('scrim').classList.add('show');
+  }
+  function closeMenu() { $('convMenu').classList.remove('open'); if (!$('sheet').classList.contains('open')) $('scrim').classList.remove('show'); }
 
   function renderModelCards() {
     var box = $('modelCards');
@@ -812,17 +970,19 @@
     renderSwatches();
     renderModelCards();
 
-    var msgs = 0, cost = 0, tok = 0;
+    var turns = 0, cost = 0, tok = 0;
     state.conversations.forEach(function (c) {
       (c.turns || []).forEach(function (t) {
-        msgs += 1;
-        (t.versions || []).forEach(function (v) {
-          if (v.a && v.a.usage) tok += (v.a.usage.input_tokens || 0) + (v.a.usage.cache_read_input_tokens || 0) + (v.a.usage.output_tokens || 0);
+        turns += 1;
+        (t.questions || []).forEach(function (q) {
+          (q.answers || []).forEach(function (a) {
+            if (a.usage) tok += (a.usage.input_tokens || 0) + (a.usage.cache_read_input_tokens || 0) + (a.usage.output_tokens || 0);
+          });
         });
       });
     });
     cost = totalCost();
-    $('usageNote').textContent = state.conversations.length + ' 个对话 · ' + msgs + ' 条提问 · ' + fmtNum(tok) + ' tokens · 累计 ' + money(cost);
+    $('usageNote').textContent = state.conversations.length + ' 个对话 · ' + turns + ' 条提问 · ' + fmtNum(tok) + ' tokens · 累计 ' + money(cost);
   }
 
   function renderPresets() {
@@ -863,7 +1023,7 @@
 
   function newChat() {
     if (state.streaming && state.abort) state.abort.abort();
-    var c = { id: uid(), title: '新对话', createdAt: Date.now(), updatedAt: Date.now(), turns: [] };
+    var c = { id: uid(), title: '新对话', createdAt: Date.now(), updatedAt: Date.now(), pinned: false, fav: false, turns: [] };
     state.conversations.unshift(c);
     state.activeId = c.id;
     save(true);
@@ -900,7 +1060,7 @@
   function bind() {
     $('btnMenu').onclick = openDrawer;
     $('btnCloseDrawer').onclick = closeDrawer;
-    $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); };
+    $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); closeMenu(); };
     $('btnSettings').onclick = function () { closeDrawer(); openSheet(); };
     $('btnCloseSheet').onclick = closeSheet;
     $('btnEditClose').onclick = closeEdit;
@@ -908,6 +1068,13 @@
     $('btnNew').onclick = newChat;
     $('btnNew2').onclick = function () { newChat(); closeDrawer(); };
     $('emptyHint').onclick = openSheet;
+
+    $('dlgOk').onclick = function () {
+      var cb = dlgCb;
+      closeAsk();
+      if (cb) cb();
+    };
+    $('dlgCancel').onclick = closeAsk;
 
     $('chipThink').onclick = function () { state.settings.think = !state.settings.think; save(); updateHeader(); haptic(); };
     $('chipSearch').onclick = function () { state.settings.search = !state.settings.search; save(); updateHeader(); haptic(); };
@@ -930,16 +1097,18 @@
       var act = t.getAttribute('data-act');
       var turn = findTurn(t.getAttribute('data-turn'));
       if (act === 'think') {
-        if (turn) withAi(turn, function (ai) { ai._thinkOpen = !ai._thinkOpen; });
+        if (turn) { var ai = curA(turn); if (ai) ai._thinkOpen = !ai._thinkOpen; }
         return;
       }
       if (!turn) return;
-      if (act === 'copy') { withAi(turn, function (ai) { copyText(ai.text); }); return; }
-      if (act === 'copyu') { copyText(curVersion(turn).q); return; }
+      if (act === 'copy') { var a = curA(turn); copyText(a ? a.text : ''); return; }
+      if (act === 'copyu') { copyText(curQ(turn).q); return; }
       if (act === 'edit') { openEdit(turn); return; }
       if (act === 'regen') { regenerate(turn); return; }
-      if (act === 'vprev') { switchVersion(turn, -1); return; }
-      if (act === 'vnext') { switchVersion(turn, 1); return; }
+      if (act === 'qprev') { switchQ(turn, -1); return; }
+      if (act === 'qnext') { switchQ(turn, 1); return; }
+      if (act === 'aprev') { switchA(turn, -1); return; }
+      if (act === 'anext') { switchA(turn, 1); return; }
     });
 
     $('btnEditSave').onclick = function () {
@@ -952,16 +1121,10 @@
     };
 
     $('convlist').addEventListener('click', function (e) {
-      var del = e.target.closest('[data-act="delconv"]');
-      if (del) {
+      var more = e.target.closest('[data-act="more"]');
+      if (more) {
         e.stopPropagation();
-        var cid = del.getAttribute('data-cid');
-        var c = findConv(cid);
-        if (c && confirm('删除「' + (c.title || '新对话') + '」？')) {
-          state.conversations = state.conversations.filter(function (x) { return x.id !== cid; });
-          if (state.activeId === cid) state.activeId = state.conversations[0] ? state.conversations[0].id : null;
-          save(true); renderMessages(); renderConvList();
-        }
+        openConvMenu(more.getAttribute('data-cid'));
         return;
       }
       var row = e.target.closest('.conv');
@@ -1011,12 +1174,13 @@
       this.textContent = pwd ? '隐藏' : '显示';
     };
     $('btnClear').onclick = function () {
-      if (!confirm('清空所有对话？Key、提示词和背景会保留。')) return;
-      state.conversations = [];
-      state.activeId = null;
-      save(true);
-      renderMessages();
-      toast('已清空');
+      ask('清空所有对话', '所有对话、版本记录都会被删除，无法恢复。Key、提示词和背景会保留。', '清空', true, function () {
+        state.conversations = [];
+        state.activeId = null;
+        save(true);
+        renderMessages();
+        toast('已清空');
+      });
     };
 
     $('scroller').addEventListener('scroll', function () {
@@ -1025,6 +1189,8 @@
     });
 
     window.__onBack = function () {
+      if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
+      if ($('convMenu').classList.contains('open')) { closeMenu(); return true; }
       if ($('editSheet').classList.contains('open')) { closeEdit(); return true; }
       if ($('sheet').classList.contains('open')) { closeSheet(); return true; }
       if ($('drawer').classList.contains('open')) { closeDrawer(); return true; }

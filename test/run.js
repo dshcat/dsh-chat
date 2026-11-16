@@ -99,41 +99,50 @@ async function main() {
     '花费': (msgs.querySelector('.fmeta') || {}).textContent
   }, null, 2));
 
-  // 重新生成 → 2 版
+  // 重新生成 → 回答 2 版（只有回答版本器）
   doc.querySelector('[data-act="regen"]').click();
-  await new Promise((r) => setTimeout(r, 1600));
+  await new Promise((r) => setTimeout(r, 1500));
   console.log('--- 重新生成 ---');
-  console.log('版本:', doc.querySelector('.vers .vnum').textContent);
+  console.log('回答版本器:', (doc.querySelector('.vers .vnum') || {}).textContent,
+    '| 问题版本器:', (doc.querySelector('.qvers .qnum') || {}).textContent || '无（正确）');
 
-  // 切回第 1 版
-  const prev = doc.querySelector('[data-act="vprev"]');
-  prev.click();
-  await new Promise((r) => setTimeout(r, 120));
-  console.log('切回:', doc.querySelector('.vers .vnum').textContent,
-    '| 正文:', doc.querySelector('.md').textContent.trim().slice(0, 12));
-
-  // 编辑 → 应保留旧版本，变第 3 版
+  // 编辑 → 问题 2 版，回答各 1 版
   doc.querySelector('[data-act="edit"]').click();
   await new Promise((r) => setTimeout(r, 120));
-  console.log('--- 编辑 ---');
-  console.log('预填:', doc.getElementById('editText').value);
   doc.getElementById('editText').value = '改过的提问';
   doc.getElementById('btnEditSave').click();
-  await new Promise((r) => setTimeout(r, 1600));
-  const st = JSON.parse(window.localStorage.getItem('deepchat.v3'));
+  await new Promise((r) => setTimeout(r, 1500));
+  const st = JSON.parse(window.localStorage.getItem('deepchat.v4'));
   const turn = st.conversations[0].turns[0];
-  console.log('版本数:', turn.versions.length, '| 当前:', turn.active + 1,
-    '| 问题列表:', turn.versions.map((v) => v.q).join(' / '));
-  console.log('界面版本器:', doc.querySelector('.vers .vnum').textContent,
-    '| 用户气泡:', doc.querySelector('.msg.user .body').textContent);
+  console.log('--- 编辑 ---');
+  console.log('问题版本:', turn.questions.length, '| 当前问题:', turn.activeQ + 1,
+    '| 问题列表:', turn.questions.map((q) => q.q).join(' / '));
+  console.log('当前问题的回答数:', turn.questions[turn.activeQ].answers.length);
+  console.log('界面: 问题', (doc.querySelector('.qvers .qnum') || {}).textContent,
+    '| 回答器', (doc.querySelector('.vers .vnum') || {}).textContent || '无（正确）');
 
-  // 切回第 1 版，问题文字也应恢复
-  doc.querySelector('[data-act="vprev"]').click();
-  doc.querySelector('[data-act="vprev"]').click();
+  // 切回第 1 个问题
+  doc.querySelector('[data-act="qprev"]').click();
   await new Promise((r) => setTimeout(r, 150));
-  console.log('切到第 1 版:', doc.querySelector('.vers .vnum').textContent,
-    '| 用户气泡:', doc.querySelector('.msg.user .body').textContent,
-    '| 正文:', doc.querySelector('.md').textContent.trim().slice(0, 10));
+  console.log('切到问题 1:', doc.querySelector('.qvers .qnum').textContent,
+    '| 气泡:', doc.querySelector('.msg.user .body').textContent,
+    '| 回答版本器:', (doc.querySelector('.vers .vnum') || {}).textContent, '(应为 1/2)');
+
+  // 会话菜单：收藏 → 删除被禁用
+  doc.getElementById('btnMenu').click();
+  await new Promise((r) => setTimeout(r, 100));
+  doc.querySelector('[data-act="more"]').click();
+  await new Promise((r) => setTimeout(r, 100));
+  const items = [...doc.querySelectorAll('#convMenuBody .menu-item')];
+  console.log('--- 会话菜单 ---');
+  console.log('菜单项:', items.map((b) => b.textContent.trim()).join(' / '));
+  items[1].click(); // 收藏
+  await new Promise((r) => setTimeout(r, 100));
+  doc.querySelector('[data-act="more"]').click();
+  await new Promise((r) => setTimeout(r, 100));
+  const items2 = [...doc.querySelectorAll('#convMenuBody .menu-item')];
+  const del = items2[items2.length - 1];
+  console.log('收藏后删除按钮禁用:', del.disabled, '| 提示:', (doc.querySelector('.menu-hint') || {}).textContent);
 
   // 主题
   doc.querySelector('#themeSeg [data-theme="light"]').click();
