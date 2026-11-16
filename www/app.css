@@ -476,3 +476,39 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
   font-size:12px;color:var(--txt);margin-top:8px;min-height:18px;font-variant-numeric:tabular-nums;
   padding:7px 10px;border-radius:10px;background:var(--bg3);border:1px solid var(--line);
 }
+
+/* ---------- 2.5 头像与裁剪 ---------- */
+.avatarrow{display:flex;align-items:center;gap:14px}
+.avatarpick{display:flex;flex-direction:column;align-items:center;gap:7px}
+.avp{
+  width:58px;height:58px;border-radius:50%;background:var(--bg3);border:1px solid var(--line);
+  background-size:cover;background-position:center;display:grid;place-items:center;overflow:hidden;
+}
+.avp svg{width:30px;height:30px}
+.avp .def-ai{fill:#fff;stroke:none}
+.avp .def-user{fill:var(--dim2);stroke:none}
+.avlabel{font-size:11px;color:var(--dim2)}
+#btnAvatarReset{margin-left:auto;flex:0 0 auto}
+
+.cropwrap{display:flex;justify-content:center;padding:8px 0 10px}
+.cropbox{
+  position:relative;overflow:hidden;border-radius:16px;background:#000;touch-action:none;
+  box-shadow:0 0 0 1px var(--line);
+}
+.cropbox img{position:absolute;left:0;top:0;max-width:none;user-select:none;-webkit-user-drag:none;transform-origin:0 0}
+.cropbox:after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);pointer-events:none;border-radius:16px}
+
+/* 聊天气泡头像 */
+.msg.ai .avatar{
+  width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--acc),#8b5cf6);
+  display:grid;place-items:center;overflow:hidden;background-size:cover;background-position:center;flex:0 0 auto;
+}
+.msg.ai .avatar svg{width:15px;height:15px;fill:#fff;stroke:none}
+
+.msg.user{flex-direction:row;align-items:flex-start;justify-content:flex-end;gap:9px}
+.ubox{display:flex;flex-direction:column;align-items:flex-end;max-width:calc(100% - 36px);min-width:0}
+.uavatar{
+  width:26px;height:26px;border-radius:50%;flex:0 0 auto;margin-top:2px;overflow:hidden;
+  background:var(--bg3);border:1px solid var(--line);display:grid;place-items:center;background-size:cover;background-position:center;
+}
+.uavatar svg{width:15px;height:15px;fill:var(--dim2);stroke:none}

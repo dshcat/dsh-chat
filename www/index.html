@@ -71,7 +71,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v2.43</div>
+    <div class="ver" id="drawerVer">v2.5</div>
   </div>
 </aside>
 
@@ -110,6 +110,20 @@
         <span id="bgVeilVal">80%</span>
       </div>
       <span class="note">数值越大背景越淡、字越清楚；拉小看得到图。图片压缩后只存本机。</span>
+    </div>
+
+    <div class="field">
+      <span class="label">头像</span>
+      <div class="avatarrow">
+        <button class="avatarpick" id="pickUserAvatar">
+          <span class="avp" id="avUser"></span><span class="avlabel">用户</span>
+        </button>
+        <button class="avatarpick" id="pickAiAvatar">
+          <span class="avp" id="avAi"></span><span class="avlabel">AI</span>
+        </button>
+        <button class="mini" id="btnAvatarReset">恢复默认</button>
+      </div>
+      <span class="note">点圆框换头像，会先让你选裁剪区域。</span>
     </div>
 
     <div class="group">模型</div>
@@ -177,7 +191,7 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.4.3</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.5.0</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT</span></div>
       <p class="note">非官方第三方客户端，与深度求索公司无隶属关系。对话由 DeepSeek API 生成，请遵守其服务条款；API 费用由 Key 持有人自行承担。</p>
     </div>
@@ -222,6 +236,26 @@
 
 <input type="file" id="filePick" multiple style="display:none">
 <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+
+<section class="sheet" id="cropSheet">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <div class="sheet-title">调整裁剪</div>
+    <button class="iconbtn small" id="btnCropClose" aria-label="关闭">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <div class="cropwrap"><div class="cropbox" id="cropBox"><img id="cropImg" alt=""></div></div>
+    <div class="veilrow"><span>缩放</span><input type="range" id="cropZoom" min="100" max="300" value="100"></div>
+    <div class="btnrow">
+      <button class="mini" id="btnCropCancel">取消</button>
+      <button class="primary" id="btnCropOk">用这张</button>
+    </div>
+  </div>
+</section>
+
+<input type="file" id="cropFile" accept="image/*" style="display:none">
 
 <section class="sheet menu" id="effortSheet">
   <div class="grab"></div>

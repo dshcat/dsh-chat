@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.4.3';
+  var APP_VERSION = '2.5.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -35,6 +35,9 @@
     trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>'
   };
 
+  var AV_LOGO = '<svg viewBox="0 0 48 48"><path d="M10 12h28a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H24l-8 7v-7h-6a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z"/></svg>';
+  var AV_USER = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.4 20c0-3.7 3.4-6 7.6-6s7.6 2.3 7.6 6z"/></svg>';
+
   var state = { settings: null, conversations: [], activeId: null, abort: null, streaming: false, editing: null, menuCid: null };
 
   /* ---------- 存取 ---------- */
@@ -43,7 +46,8 @@
       settings: {
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: PRESETS[0].text, think: true, search: true, effort: 'high',
-        theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {}
+        theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
+        avatar: { user: '', ai: '' }
       },
       conversations: [], activeId: null
     };
@@ -134,6 +138,7 @@
     if (typeof state.settings.bg.veil !== 'number') state.settings.bg.veil = 0.8;
     if (!state.settings.effort) state.settings.effort = state.settings.think ? 'high' : 'none';
     if (!state.settings.usageByDay) state.settings.usageByDay = {};
+    if (!state.settings.avatar) state.settings.avatar = { user: '', ai: '' };
     try { if (!localStorage.getItem(LS)) save(true); } catch (e) {}
     if (!state.conversations.length) state.activeId = null;
     if (state.activeId && !findConv(state.activeId)) state.activeId = null;
@@ -461,9 +466,13 @@
     var ai = curA(turn);
     if (!ai) return '<div class="ai-head"><div class="avatar"><div class="spinner"></div></div><span>等待生成</span></div>';
 
+    var av = state.settings.avatar || {};
+    var avHtml;
+    if (av.ai) avHtml = '<div class="avatar" style="background-image:url(' + av.ai + ')"></div>';
+    else avHtml = '<div class="avatar">' + (ai.streaming && !ai.text ? '<div class="spinner"></div>' : AV_LOGO) + '</div>';
+
     var h = '';
-    h += '<div class="ai-head"><div class="avatar">' +
-      (ai.streaming && !ai.text ? '<div class="spinner"></div>' : 'D') + '</div><span>' +
+    h += '<div class="ai-head">' + avHtml + '<span>' +
       (ai.streaming ? '正在生成' : 'DeepChat') + '</span></div>';
 
     if (ai.thinking) {
@@ -536,8 +545,10 @@
     var wrap = document.createElement('div');
     wrap.className = 'turn';
     wrap.dataset.turn = turn.id;
+    var uav = (state.settings.avatar || {}).user;
     wrap.innerHTML =
       '<div class="msg user">' +
+      '<div class="ubox">' +
       (q && q.files && q.files.some(function (f) { return f.kind === 'image'; })
         ? '<div class="uatt">' + q.files.filter(function (f) { return f.kind === 'image'; }).map(function (f) {
           return '<img src="data:image/jpeg;base64,' + f.data + '" alt="">';
@@ -553,6 +564,9 @@
       '<button data-act="edit" data-turn="' + turn.id + '">' + ICON.edit + '编辑</button>' +
       '<button data-act="copyu" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
       '</div></div>' +
+      '<div class="uavatar"' + (uav ? ' style="background-image:url(' + uav + ')"' : '') + '>' +
+      (uav ? '' : AV_USER) + '</div>' +
+      '</div>' +
       '<div class="msg ai" data-ai="' + turn.id + '"><div class="body">' + aiInner(turn) + '</div></div>';
     return wrap;
   }
@@ -1193,6 +1207,88 @@
     el.textContent = bits.join(' · ');
   }
 
+  /* ---------- 裁剪 ---------- */
+  var crop = { img: null, aspect: 1, cb: null, zoom: 1, ox: 0, oy: 0, w: 0, h: 0, base: 1, iw: 0, ih: 0 };
+  var cropTarget = 'user';
+
+  function cropApply() {
+    var el = $('cropImg');
+    el.style.width = crop.iw + 'px';
+    el.style.height = crop.ih + 'px';
+    el.style.transform = 'translate(' + crop.ox + 'px,' + crop.oy + 'px)';
+  }
+
+  function cropClamp() {
+    crop.iw = crop.img.width * crop.base * crop.zoom;
+    crop.ih = crop.img.height * crop.base * crop.zoom;
+    crop.ox = Math.min(0, Math.max(crop.w - crop.iw, crop.ox));
+    crop.oy = Math.min(0, Math.max(crop.h - crop.ih, crop.oy));
+    cropApply();
+  }
+
+  function openCrop(src, aspect, cb) {
+    var img = new Image();
+    img.onload = function () {
+      var box = $('cropBox');
+      var maxH = Math.min(window.innerHeight * 0.42, 360);
+      var maxW = window.innerWidth - 96;
+      var h = maxH, w = h * aspect;
+      if (w > maxW) { w = maxW; h = w / aspect; }
+      crop = { img: img, aspect: aspect, cb: cb, zoom: 1, w: w, h: h, base: Math.max(w / img.width, h / img.height) };
+      crop.iw = img.width * crop.base;
+      crop.ih = img.height * crop.base;
+      crop.ox = (w - crop.iw) / 2;
+      crop.oy = (h - crop.ih) / 2;
+      box.style.width = w + 'px';
+      box.style.height = h + 'px';
+      var el = $('cropImg');
+      el.src = src;
+      cropApply();
+      $('cropZoom').value = 100;
+      $('cropSheet').classList.add('open');
+      $('scrim').classList.add('show');
+    };
+    img.onerror = function () { toast('这张图打不开'); };
+    img.src = src;
+  }
+
+  function closeCrop() {
+    $('cropSheet').classList.remove('open');
+    $('scrim').classList.remove('show');
+  }
+
+  function cropConfirm() {
+    if (!crop.img) { closeCrop(); return; }
+    var outW = crop.aspect >= 0.9 ? 512 : 900;
+    var outH = Math.round(outW / crop.aspect);
+    var cv = document.createElement('canvas');
+    cv.width = outW;
+    cv.height = outH;
+    var ctx = cv.getContext('2d');
+    var k = outW / crop.w;
+    try {
+      ctx.drawImage(crop.img, crop.ox * k, crop.oy * k, crop.iw * k, crop.ih * k);
+    } catch (e) { toast('裁剪失败'); return; }
+    var data;
+    try { data = cv.toDataURL('image/jpeg', crop.aspect >= 0.9 ? 0.86 : 0.76); } catch (e) { toast('裁剪失败'); return; }
+    var cb = crop.cb;
+    closeCrop();
+    if (cb) cb(data);
+  }
+
+  function renderAvatarSettings() {
+    var a = state.settings.avatar || { user: '', ai: '' };
+    var u = $('avUser'), i = $('avAi');
+    if (u) {
+      u.style.backgroundImage = a.user ? 'url(' + a.user + ')' : '';
+      u.innerHTML = a.user ? '' : AV_USER.replace('<svg', '<svg class="def-user"');
+    }
+    if (i) {
+      i.style.backgroundImage = a.ai ? 'url(' + a.ai + ')' : '';
+      i.innerHTML = a.ai ? '' : AV_LOGO.replace('<svg', '<svg class="def-ai"');
+    }
+  }
+
   function renderChart() {
     var box = $('chart30');
     if (!box) return;
@@ -1342,6 +1438,7 @@
     renderPresets();
     renderSwatches();
     renderModelCards();
+    renderAvatarSettings();
     renderChart();
 
     var turns = 0, cost = 0, tok = 0;
@@ -1434,7 +1531,7 @@
   function bind() {
     $('btnMenu').onclick = openDrawer;
     $('btnCloseDrawer').onclick = closeDrawer;
-    $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); };
+    $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); closeCrop(); };
     $('btnSettings').onclick = function () { closeDrawer(); openSheet(); };
     $('btnCloseSheet').onclick = closeSheet;
     $('btnEditClose').onclick = closeEdit;
@@ -1550,9 +1647,71 @@
     });
 
     $('bgFile').onchange = function () {
-      pickBackgroundImage(this.files && this.files[0]);
+      var f = this.files && this.files[0];
       this.value = '';
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        openCrop(String(fr.result), window.innerWidth / window.innerHeight, function (data) {
+          state.settings.bg = { kind: 'image', image: data, veil: state.settings.bg.veil || 0.8 };
+          save(true); applyBg(); renderSwatches(); toast('背景已替换');
+        });
+      };
+      fr.readAsDataURL(f);
     };
+
+    $('pickUserAvatar').onclick = function () { cropTarget = 'user'; $('cropFile').click(); };
+    $('pickAiAvatar').onclick = function () { cropTarget = 'ai'; $('cropFile').click(); };
+    $('cropFile').onchange = function () {
+      var f = this.files && this.files[0];
+      this.value = '';
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        openCrop(String(fr.result), 1, function (data) {
+          state.settings.avatar = state.settings.avatar || { user: '', ai: '' };
+          state.settings.avatar[cropTarget] = data;
+          save(true); renderAvatarSettings(); renderMessages(); toast('头像已更新');
+        });
+      };
+      fr.readAsDataURL(f);
+    };
+    $('btnAvatarReset').onclick = function () {
+      state.settings.avatar = { user: '', ai: '' };
+      save(true); renderAvatarSettings(); renderMessages(); toast('已恢复默认头像');
+    };
+    $('btnCropCancel').onclick = closeCrop;
+    $('btnCropClose').onclick = closeCrop;
+    $('btnCropOk').onclick = cropConfirm;
+    $('cropZoom').oninput = function () {
+      if (!crop.img) return;
+      var nz = (+this.value) / 100;
+      var cx = (crop.w / 2 - crop.ox) / crop.iw;
+      var cy = (crop.h / 2 - crop.oy) / crop.ih;
+      crop.zoom = nz;
+      crop.iw = crop.img.width * crop.base * nz;
+      crop.ih = crop.img.height * crop.base * nz;
+      crop.ox = crop.w / 2 - cx * crop.iw;
+      crop.oy = crop.h / 2 - cy * crop.ih;
+      cropClamp();
+    };
+    (function () {
+      var box = $('cropBox');
+      var drag = null;
+      box.addEventListener('pointerdown', function (e) {
+        if (!crop.img) return;
+        drag = { x: e.clientX, y: e.clientY, ox: crop.ox, oy: crop.oy };
+        try { box.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+      box.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        crop.ox = drag.ox + (e.clientX - drag.x);
+        crop.oy = drag.oy + (e.clientY - drag.y);
+        cropClamp();
+      });
+      box.addEventListener('pointerup', function () { drag = null; });
+      box.addEventListener('pointercancel', function () { drag = null; });
+    })();
     $('btnBgClear').onclick = function () {
       state.settings.bg = { kind: 'none' };
       save(true); applyBg(); renderSwatches(); toast('背景已清除');
@@ -1584,6 +1743,7 @@
 
     window.__onBack = function () {
       if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
+      if ($('cropSheet').classList.contains('open')) { closeCrop(); return true; }
       if ($('effortSheet').classList.contains('open')) { closeEffort(); return true; }
       if ($('convMenu').classList.contains('open')) { closeMenu(); return true; }
       if ($('editSheet').classList.contains('open')) { closeEdit(); return true; }
