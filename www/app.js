@@ -5,9 +5,9 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.1.0';
+  var APP_VERSION = '3.2.0';
   var API_PATH = '/anthropic/v1/messages';
-  var MAX_TOKENS = 8192;
+  var MAX_TOKENS = 65536;
 
   var PRESETS = [
     { name: '日常助手', text: '你是我手机里的私人助手。说话直接、有判断：能一句话说清就不写三段；不确定就说不确定，不要编。默认中文回答。不要客套开场白，直接给答案。' },
@@ -47,7 +47,7 @@
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: PRESETS[0].text, think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
-        avatar: { user: '', ai: '' }, agreed: false
+        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans'
       },
       conversations: [], activeId: null
     };
@@ -235,6 +235,116 @@
     var t = state.settings.theme || 'auto';
     if (t !== 'auto') return t;
     try { return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; } catch (e) { return 'dark'; }
+  }
+
+  /* ---------- 多语言（界面文案） ---------- */
+  var HANT = { '设':'設','置':'置','语':'語','言':'言','主':'主','题':'題','背':'背','景':'景','头':'頭','像':'像',
+    '模':'模','型':'型','提':'提','示':'示','词':'詞','数':'數','据':'據','关':'關','于':'於','用':'用','量':'量',
+    '通':'通','外':'外','观':'觀','跟':'跟','随':'隨','系':'系','统':'統','浅':'淺','色':'色','深':'深','自':'自',
+    '定':'定','义':'義','清':'清','除':'除','恢':'恢','复':'復','默':'默','认':'認','开':'開','边':'邊','想':'想',
+    '边':'邊','答':'答','快':'快','省':'省','按':'按','次':'次','额':'額','外':'外','计':'計','费':'費','温':'溫',
+    '度':'度','最':'最','散':'散','模':'模','式':'式','该':'該','参':'參','不':'不','生':'生','效':'效','本':'本',
+    '对':'對','话':'話','空':'空','则':'則','全':'全','局':'局','的':'的','名':'名','称':'稱','给':'給','起':'起',
+    '个':'個','名':'名','字':'字','上':'上','下':'下','文':'文','已':'已','剩':'剩','余':'餘','限':'限','轮':'輪',
+    '费':'費','仅':'僅','供':'供','参':'參','考':'考','高':'高','峰':'峰','期':'期','为':'為','两':'兩','倍':'倍',
+    '复':'復','制':'製','重':'重','新':'新','编':'編','辑':'輯','保':'保','存':'存','并':'並','删':'刪','确':'確',
+    '取':'取','消':'消','发':'發','送':'送','消':'消','息':'息','搜':'搜','索':'索','联':'聯','网':'網','深':'深',
+    '推':'推','理':'理','退':'退','出':'出','同':'同','意':'意','继':'繼','续':'續','文':'文','件':'件','图':'圖',
+    '片':'片','选':'選','择':'擇','张':'張','压':'壓','缩':'縮','后':'後','只':'只','存':'存','在':'在','本':'本',
+    '机':'機','换':'換','成':'成','纯':'純','色':'色','心':'心','数':'數','量':'量','柱':'柱','子':'子','看':'看',
+    '当':'當','天':'天','点':'點','一':'一','下':'下','近':'近','合':'合','计':'計','今':'今','版':'版','释':'釋' };
+
+  function toHant(str) {
+    var out = '';
+    for (var i = 0; i < str.length; i++) {
+      var c = str[i];
+      out += (HANT[c] || c);
+    }
+    return out;
+  }
+
+  var EN = {
+    '通用': 'General', '语言': 'Language', '外观': 'Appearance', '模型': 'Model', '提示词': 'Prompt',
+    'API': 'API', '数据': 'Data', '关于': 'About', '用量': 'Usage', '头像': 'Avatars',
+    '主题': 'Theme', '背景': 'Background', '跟随系统': 'System', '浅色': 'Light', '深色': 'Dark',
+    '自定义背景': 'Custom background', '清除背景': 'Clear background', '透明度': 'Opacity',
+    '用户': 'User', 'AI': 'AI', '恢复默认': 'Reset', '默认深度思考': 'Thinking by default',
+    '默认联网': 'Web search by default', '默认温度': 'Default temperature',
+    '按次额外计费': 'Charged per search', '本对话的系统提示词': "This chat's system prompt",
+    '对话名称': 'Chat title', '温度': 'Temperature', '上下文': 'Context',
+    'API Key': 'API Key', '显示': 'Show', '隐藏': 'Hide', '清空所有对话': 'Clear all chats',
+    '导出备份': 'Export backup', '恢复备份': 'Restore backup', '版本': 'Version', '性质': 'Type',
+    '协议': 'License', '密钥': 'API key', '流量': 'Traffic', '第三方客户端': 'Third-party client',
+    '申请 API Key': 'Get API Key', 'API 文档': 'API docs', '价格': 'Pricing',
+    '设置': 'Settings', '新对话': 'New chat',
+    '联网': 'Web search', '推理': 'Reasoning',
+    '发消息…': 'Message…', '搜索对话、提问或回答': 'Search chats…',
+    '设置 · 外观 · 提示词': 'Settings · Appearance · Prompt',
+    '点一下柱子，看当天用量': 'Tap a bar for that day',
+    '近 15 天 —': 'Last 15 days —',
+    '费用按官方价格估算，仅供参考；高峰期为两倍。': 'Costs are estimates; peak hours are 2x.',
+    '对话设置': 'Chat settings', '上下文用量': 'Context usage',
+    '使用前请读一下': 'Before you start'
+  };
+
+  var LANG_NODES = null;
+  function langRoots() {
+    return ['.topbar', '.composer', '.drawer', '#sheet', '#editSheet', '#ctxSheet', '#convSetSheet', '.empty'];
+  }
+  function captureLangNodes() {
+    if (LANG_NODES) return;
+    LANG_NODES = [];
+    langRoots().forEach(function (sel) {
+      var root = document.querySelector(sel);
+      if (!root) return;
+      (function walk(n) {
+        if (n.nodeType === 3) { LANG_NODES.push({ n: n, o: n.nodeValue }); return; }
+        if (n.nodeType !== 1) return;
+        if (n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return;
+        for (var i = 0; i < n.childNodes.length; i++) walk(n.childNodes[i]);
+      })(root);
+    });
+    var ph = document.querySelectorAll('[placeholder]');
+    for (var i = 0; i < ph.length; i++) {
+      if (!ph[i]._ph) ph[i]._ph = ph[i].getAttribute('placeholder');
+    }
+  }
+  function applyLang() {
+    captureLangNodes();
+    var lang = state.settings.lang || 'zh-Hans';
+    document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : lang === 'zh-Hant' ? 'zh-Hant' : 'zh-CN');
+    LANG_NODES.forEach(function (it) { it.n.nodeValue = it.o; });
+    if (lang !== 'zh-Hans') {
+      LANG_NODES.forEach(function (it) {
+        var key = it.o.trim();
+        if (!key) return;
+        var val = null;
+        if (lang === 'en') val = EN[key];
+        else val = toHant(key);
+        if (!val || val === key) return;
+        it.n.nodeValue = it.o.replace(key, val);
+      });
+      var inputs = document.querySelectorAll('[placeholder]');
+      for (var i = 0; i < inputs.length; i++) {
+        var p0 = inputs[i]._ph || '';
+        if (!p0) continue;
+        var pv = lang === 'en' ? EN[p0.trim()] : toHant(p0);
+        if (pv) inputs[i].setAttribute('placeholder', pv);
+      }
+    } else {
+      var ph2 = document.querySelectorAll('[placeholder]');
+      for (var j = 0; j < ph2.length; j++) {
+        if (ph2[j]._ph) ph2[j].setAttribute('placeholder', ph2[j]._ph);
+      }
+    }
+    var seg = $('langSeg');
+    if (seg) {
+      var bs = seg.querySelectorAll('button');
+      for (var k = 0; k < bs.length; k++) {
+        bs[k].classList.toggle('active', bs[k].getAttribute('data-lang') === (state.settings.lang || 'zh-Hans'));
+      }
+    }
+    syncEffortUI();
   }
 
   function convOv(conv) { return (conv && conv.overrides) || {}; }
@@ -730,11 +840,8 @@
     var conv = activeConv(), s = state.settings;
     $('chatTitle').textContent = conv ? conv.title : '新对话';
     $('chatSub').textContent = [s.model, s.think ? '思考' : '快答', s.search ? '联网' : '不联网'].join(' · ');
-    $('chipThink').classList.toggle('on', !!s.think);
     $('chipSearch').classList.toggle('on', !!s.search);
-    var ef = s.effort || 'high';
-    $('chipEffort').textContent = '思考 ' + (ef === 'none' ? '关' : ef === 'low' ? '低' : ef === 'max' ? '最高' : '高');
-    $('chipEffort').classList.toggle('on', ef !== 'none');
+    syncEffortUI();
     updateCtxRing();
   }
 
@@ -1710,11 +1817,31 @@
   }
 
   var EFFORTS = [
-    { v: 'none', t: '不思考', d: '关闭思考，最快最省' },
+    { v: 'none', t: '关', d: '关闭思考，最快最省' },
     { v: 'low', t: '低', d: '简单问题，少量思考' },
     { v: 'high', t: '高', d: '默认，日常够用' },
     { v: 'max', t: '最高', d: '难题、复杂推理' }
   ];
+
+  function effortIndex(v) {
+    for (var i = 0; i < EFFORTS.length; i++) if (EFFORTS[i].v === v) return i;
+    return 2;
+  }
+  function syncEffortUI() {
+    var ef = state.settings.effort || 'high';
+    var i = effortIndex(ef);
+    var sl = $('effortSlider');
+    if (sl) sl.value = String(i);
+    var lab = $('effortLabel');
+    if (lab) {
+      var lang = state.settings.lang || 'zh-Hans';
+      if (lang === 'en') lab.textContent = 'Reasoning ' + ['Off', 'Low', 'High', 'Max'][i];
+      else if (lang === 'zh-Hant') lab.textContent = toHant('推理 ' + EFFORTS[i].t);
+      else lab.textContent = '推理 ' + EFFORTS[i].t;
+    }
+    var wrap = $('effortWrap');
+    if (wrap) wrap.classList.toggle('off', ef === 'none');
+  }
 
   function openEffort() {
     var body = $('effortBody');
@@ -1970,8 +2097,16 @@
     };
     $('dlgCancel').onclick = closeAsk;
 
-    $('chipThink').onclick = function () { state.settings.think = !state.settings.think; save(); updateHeader(); haptic(); };
     $('chipSearch').onclick = function () { state.settings.search = !state.settings.search; save(); updateHeader(); haptic(); };
+    $('effortSlider').oninput = function () {
+      var e = EFFORTS[parseInt(this.value, 10)] || EFFORTS[2];
+      state.settings.effort = e.v;
+      state.settings.think = e.v !== 'none';
+      syncEffortUI();
+      save();
+      haptic();
+    };
+    $('btnConvSet2').onclick = openConvSet;
     $('ctxRing').onclick = openCtx;
     $('btnCtxClose').onclick = closeCtx;
     $('btnConvSet').onclick = openConvSet;
@@ -2030,7 +2165,6 @@
       save(true); applyBg(); toast('已跟随全局背景');
     };
 
-    $('chipEffort').onclick = openEffort;
     $('btnAttach').onclick = function () { $('filePick').click(); };
     $('filePick').onchange = function () { addFiles(this.files || []); this.value = ''; };
     $('btnExport').onclick = exportBackup;
@@ -2148,6 +2282,15 @@
         longPressed = false;
       }, true);
     })();
+
+    $('langSeg').addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      state.settings.lang = b.getAttribute('data-lang');
+      save(true);
+      applyLang();
+      haptic();
+    });
 
     $('themeSeg').addEventListener('click', function (e) {
       var b = e.target.closest('button');
@@ -2365,6 +2508,7 @@
     } catch (e) {}
     bind();
     applyTheme();
+    applyLang();
     renderMessages();
     updateHeader();
     if (!state.settings.agreed) showAgree();

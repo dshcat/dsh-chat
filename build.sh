@@ -6,7 +6,7 @@ SDK=$ROOT/sdk
 BT=$SDK/build-tools/34.0.0
 AJAR=$SDK/platforms/android-33/android.jar
 BUILD=$ROOT/build
-OUT=$ROOT/DSChat-3.1.0.apk
+OUT=$ROOT/DSChat-3.2.0.apk
 
 rm -rf "$BUILD"
 mkdir -p "$BUILD/assets" "$BUILD/classes" "$BUILD/dex"
@@ -20,7 +20,7 @@ aapt package -f \
   -I "$AJAR" \
   -F "$BUILD/base.apk" \
   --min-sdk-version 26 --target-sdk-version 33 \
-  --version-code 18 --version-name 3.1.0
+  --version-code 19 --version-name 3.2.0
 
 echo "[2/6] javac"
 javac --release 8 -nowarn -cp "$AJAR" -d "$BUILD/classes" \

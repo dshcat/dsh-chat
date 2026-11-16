@@ -678,3 +678,20 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .tempval{color:var(--acc2);font-size:13px;margin-left:6px;font-variant-numeric:tabular-nums}
 #csTemp{-webkit-appearance:none;width:100%;height:4px;border-radius:99px;background:var(--line2);outline:none;margin:10px 0 2px}
 #csTemp::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--acc);border:2px solid var(--bg2)}
+
+/* ---------- 3.2 推理等级滑条 ---------- */
+.effortwrap{
+  display:inline-flex;align-items:center;gap:8px;padding:4px 12px 4px 11px;border-radius:999px;
+  background:var(--bg2);border:1px solid var(--line);flex:0 0 auto;height:32px;
+}
+.effortwrap #effortLabel{font-size:11.5px;color:var(--acc2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.effortwrap.off #effortLabel{color:var(--dim2)}
+.effortwrap input[type=range]{
+  -webkit-appearance:none;width:78px;height:4px;border-radius:99px;background:var(--line2);outline:none;
+}
+.effortwrap input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--acc);border:2px solid var(--bg2);
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+}
+.chip.gear{gap:5px;color:var(--dim)}
+.chip.gear svg{stroke-width:2;color:var(--dim2)}
