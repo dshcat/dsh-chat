@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.4.0';
+  var APP_VERSION = '2.4.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -538,10 +538,14 @@
     wrap.dataset.turn = turn.id;
     wrap.innerHTML =
       '<div class="msg user">' +
-      (q && q.files && q.files.length ? '<div class="uatt">' + q.files.map(function (f) {
-        if (f.kind === 'image') return '<img src="data:image/jpeg;base64,' + f.data + '" alt="">';
-        return '<span class="uatt-item">' + esc(f.name) + '</span>';
-      }).join('') + '</div>' : '') +
+      (q && q.files && q.files.some(function (f) { return f.kind === 'image'; })
+        ? '<div class="uatt">' + q.files.filter(function (f) { return f.kind === 'image'; }).map(function (f) {
+          return '<img src="data:image/jpeg;base64,' + f.data + '" alt="">';
+        }).join('') + '</div>' : '') +
+      (q && q.files && q.files.some(function (f) { return f.kind !== 'image'; })
+        ? '<div class="ufiles">' + q.files.filter(function (f) { return f.kind !== 'image'; }).map(function (f) {
+          return '<span class="ufile">' + ICON.link + esc(f.name) + '</span>';
+        }).join('') + '</div>' : '') +
       '<div class="body">' + esc(q ? q.q : '') + '</div>' +
       '<div class="uact">' +
       '<span class="utime">' + hhmm(q ? q.ts : Date.now()) + '</span>' +
@@ -783,6 +787,18 @@
             delete b.output_config;
             return sendOnce(b, false);
           }
+          // 图片被拒时退回纯文本重发一次，至少别让整条消息丢掉
+          if (allowRetry && (res.status === 400 || res.status === 413) &&
+              JSON.stringify(b.messages).indexOf('"image"') >= 0) {
+            b.messages = b.messages.map(function (m) {
+              if (!Array.isArray(m.content)) return m;
+              var kept = m.content.filter(function (c) { return c && c.type !== 'image'; });
+              if (!kept.length) kept = [{ type: 'text', text: '（图片未能发送）' }];
+              return { role: m.role, content: kept };
+            });
+            toast('图片没被接受，已按纯文本重发');
+            return sendOnce(b, false);
+          }
           throw new Error('HTTP ' + res.status + ' · ' + String(msg).slice(0, 200));
         });
       });
@@ -817,7 +833,11 @@
       if (err && err.name === 'AbortError') {
         if (!ai.text) ai.text = '（已停止）';
       } else {
-        ai.error = (err && err.message) || '请求失败';
+        var msg = (err && err.message) || '请求失败';
+        if (/image|media|content/i.test(msg) && JSON.stringify(body.messages).indexOf('"image"') >= 0) {
+          msg += '　（图片可能不被当前模型接受，试试切成 deepseek-flash、或减少图片）';
+        }
+        ai.error = msg;
       }
       finish();
     });
@@ -854,8 +874,8 @@
       var d = document.createElement('div');
       d.className = 'att' + (f.uploading ? ' uploading' : '');
       var head = f.kind === 'image' && f.data
-        ? '<img src="' + f.data + '" alt="">'
-        : (f.uploading ? '<span class="spin2"></span>' : ICON.link.replace('<svg', '<svg width="12" height="12"'));
+        ? '<img class="thumb" src="data:image/jpeg;base64,' + f.data + '" alt="">'
+        : '<span class="ficon">' + (f.uploading ? '<span class="spin2"></span>' : ICON.link) + '</span>';
       d.innerHTML = head + '<span class="nm">' + esc(f.name) + '</span>' +
         '<button class="rm" data-rm="' + i + '">✕</button>';
       row.appendChild(d);
@@ -885,7 +905,7 @@
         ctx.drawImage(img, 0, 0, cv.width, cv.height);
         var data;
         try { data = cv.toDataURL('image/jpeg', 0.8); } catch (e) { cb(null); return; }
-        cb(data.split(',')[1]);
+        cb(data.indexOf('base64,') === 0 ? data.slice(7) : data.split(',')[1]);
       };
       img.onerror = function () { cb(null); };
       img.src = fr.result;
@@ -966,6 +986,12 @@
     if (state.streaming) return;
 
     if (pending.some(function (f) { return f.uploading; })) { toast('文件还在处理，稍等'); return; }
+    if (pending.some(function (f) { return f.kind === 'image' && !f.data; })) { toast('图片还没读好，重选一次'); return; }
+    if (pending.some(function (f) { return f.kind === 'doc' && !f.fileId; })) { toast('文件还没上传完'); return; }
+    if (pending.some(function (f) { return f.kind === 'image'; }) && state.settings.model !== 'deepseek-flash') {
+      toast('看图要先切到 deepseek-flash');
+      return;
+    }
     var conv = ensureConv();
     var q0 = makeQuestion(text);
     q0.files = pending.filter(function (f) { return f.kind === 'image' ? !!f.data : f.kind === 'text' ? !!f.text : !!f.fileId; });

@@ -15,7 +15,8 @@
 - 版本无上限，编辑或重新生成都**保留**全部历史
 - 每条消息带日期与时间，跨天自动插入日期分隔
 - 思考强度四档：不思考 / 低 / 高 / 最高（对应 API 的 thinking 与 output_config.effort）
-- 图片、文本文件、PDF/Office 附件：图片内联，文本直读，文档走 Files API 解析
+- 图片、文本文件、PDF/Office 附件：图片内联并在对话里显示大图，文本直读，文档走 Files API 解析
+- 发图前会校验：图片是否读完、当前模型是否支持看图；接口拒图时自动退回纯文本重发
 - 联网搜索 + 读链接，带工具进度、来源列表和 `[1]` 引用角标
 - 会话本地保存、切换、删除，自动标题
 - 置顶 / 收藏：收藏的对话受保护，需先取消收藏才能删除
@@ -38,7 +39,7 @@
 
 ## 安装
 
-1. 下载 `DeepChat-2.4.0.apk`
+1. 下载 `DeepChat-2.4.1.apk`
 2. 点开安装，允许一次「未知来源」
 3. 打开 → 左上角 ☰ → 设置 → 填 API Key（[platform.deepseek.com](https://platform.deepseek.com) 申请）
 
@@ -62,7 +63,7 @@ JSON 存到手机「下载」目录（不含 API Key）；「恢复备份」可�
 ## 自己编译
 
 ```bash
-bash build.sh      # 产出 DeepChat-2.4.0.apk
+bash build.sh      # 产出 DeepChat-2.4.1.apk
 ```
 
 依赖：JDK 17、Android build-tools 34 的 `lib/d8.jar` 与 `lib/apksigner.jar`、
