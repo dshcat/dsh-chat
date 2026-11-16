@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.4.1';
+  var APP_VERSION = '2.4.2';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -546,7 +546,7 @@
         ? '<div class="ufiles">' + q.files.filter(function (f) { return f.kind !== 'image'; }).map(function (f) {
           return '<span class="ufile">' + ICON.link + esc(f.name) + '</span>';
         }).join('') + '</div>' : '') +
-      '<div class="body">' + esc(q ? q.q : '') + '</div>' +
+      (q && q.q ? '<div class="body">' + esc(q.q) + '</div>' : '') +
       '<div class="uact">' +
       '<span class="utime">' + hhmm(q ? q.ts : Date.now()) + '</span>' +
       questionVersHtml(turn) +
@@ -646,7 +646,7 @@
       else if (f.kind === 'doc') blocks.push({ type: 'document', source: { type: 'file', file_id: f.fileId } });
       else if (f.kind === 'text') blocks.push({ type: 'document', source: { type: 'text', media_type: 'text/plain', data: f.text } });
     });
-    blocks.push({ type: 'text', text: q.q });
+    if (q.q) blocks.push({ type: 'text', text: q.q });
     return blocks;
   }
 
@@ -981,7 +981,10 @@
 
   function sendText(text) {
     text = (text || '').trim();
-    if (!text) return;
+    var ready = pending.filter(function (f) {
+      return f.kind === 'image' ? !!f.data : f.kind === 'text' ? !!f.text : !!f.fileId;
+    });
+    if (!text && !ready.length) { toast('说点什么，或者加张图片'); return; }
     if (!state.settings.apiKey) { openSheet(); toast('先填 API Key'); return; }
     if (state.streaming) return;
 
@@ -995,11 +998,12 @@
     var conv = ensureConv();
     var q0 = makeQuestion(text);
     q0.files = pending.filter(function (f) { return f.kind === 'image' ? !!f.data : f.kind === 'text' ? !!f.text : !!f.fileId; });
+    if (!text && q0.files.length) q0.title = '图片 · ' + q0.files[0].name;
     pending = [];
     renderAttach();
     var turn = { id: uid(), activeQ: 0, questions: [q0] };
     conv.turns.push(turn);
-    if (conv.turns.length === 1) conv.title = convTitleOf(text);
+    if (conv.turns.length === 1) conv.title = text ? convTitleOf(text) : (q0.title || '新对话');
     conv.updatedAt = Date.now();
     $('input').value = '';
     autoGrow();
@@ -1023,7 +1027,10 @@
   function editAndRegenerate(turn, text) {
     var conv = activeConv();
     if (!conv) return;
-    turn.questions.push(makeQuestion(text));
+    var old = curQ(turn);
+    var nq = makeQuestion(text);
+    if (old && old.files && old.files.length) nq.files = old.files.slice();
+    turn.questions.push(nq);
     turn.activeQ = turn.questions.length - 1;
     conv.updatedAt = Date.now();
     save(true);
@@ -1442,7 +1449,8 @@
       var turn = state.editing;
       if (!turn) { closeEdit(); return; }
       var txt = $('editText').value.trim();
-      if (!txt) { toast('内容不能为空'); return; }
+      var qq = curQ(turn);
+      if (!txt && !(qq && qq.files && qq.files.length)) { toast('内容不能为空'); return; }
       closeEdit();
       editAndRegenerate(turn, txt);
     };
