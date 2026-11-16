@@ -466,3 +466,13 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .msg.user .ufiles{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin-bottom:7px;max-width:87%}
 .msg.user .ufile{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--dim);background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:4px 9px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .msg.user .ufile svg{width:11px;height:11px;flex:0 0 auto}
+
+/* 15 天用量图 */
+.chart30{gap:4px;height:92px;cursor:pointer;touch-action:none}
+.chart30 .bar{border-radius:5px 5px 3px 3px}
+.chart30 .bar.sel{background:var(--acc);box-shadow:0 0 0 1.5px var(--edge),0 0 12px var(--acc-soft)}
+.chartaxis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim2);margin-top:4px}
+.chartsel{
+  font-size:12px;color:var(--txt);margin-top:8px;min-height:18px;font-variant-numeric:tabular-nums;
+  padding:7px 10px;border-radius:10px;background:var(--bg3);border:1px solid var(--line);
+}

@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.4.2';
+  var APP_VERSION = '2.4.3';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -754,10 +754,18 @@
     function finish() {
       cleanupBlocks(ai);
       if (ai.usage) ai.cost = costOf(ai.usage, s.model);
-      if (ai.cost) {
+      if (ai.cost || ai.usage) {
         var dk = dayKey(Date.now());
         state.settings.usageByDay = state.settings.usageByDay || {};
-        state.settings.usageByDay[dk] = (state.settings.usageByDay[dk] || 0) + ai.cost;
+        var rec = state.settings.usageByDay[dk];
+        if (typeof rec === 'number') rec = { c: rec, t: 0, n: 0 };
+        if (!rec) rec = { c: 0, t: 0, n: 0 };
+        rec.c += ai.cost || 0;
+        if (ai.usage) {
+          rec.t += (ai.usage.input_tokens || 0) + (ai.usage.cache_read_input_tokens || 0) + (ai.usage.output_tokens || 0);
+        }
+        rec.n += 1;
+        state.settings.usageByDay[dk] = rec;
       }
       ai.streaming = false;
       conv.updatedAt = Date.now();
@@ -1163,26 +1171,77 @@
     }
   }
 
+  var chartSel = -1, chartDays = [];
+
+  function dayShort(ts) {
+    var d = new Date(ts);
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
+  function paintChartSel() {
+    var box = $('chart30');
+    if (!box) return;
+    var bars = box.querySelectorAll('.bar');
+    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('sel', i === chartSel);
+    var el = $('chartSel');
+    if (!el) return;
+    var d = chartDays[chartSel];
+    if (!d) { el.textContent = '点一下柱子，看当天用量'; return; }
+    var bits = [dayLabel(d.ts), money(d.c)];
+    if (d.t) bits.push(fmtNum(d.t) + ' tokens');
+    if (d.n) bits.push(d.n + ' 条回答');
+    el.textContent = bits.join(' · ');
+  }
+
   function renderChart() {
     var box = $('chart30');
     if (!box) return;
-    var days = [], total = 0;
-    for (var i = 29; i >= 0; i--) {
-      var d = new Date(Date.now() - i * 86400000);
-      var k = dayKey(d.getTime());
-      var c = (state.settings.usageByDay || {})[k] || 0;
-      total += c;
-      days.push({ k: k, c: c, today: i === 0 });
+    chartDays = [];
+    var total = 0;
+    for (var i = 14; i >= 0; i--) {
+      var ts = Date.now() - i * 86400000;
+      var k = dayKey(ts);
+      var rec = (state.settings.usageByDay || {})[k];
+      if (typeof rec === 'number') rec = { c: rec, t: 0, n: 0 };
+      rec = rec || { c: 0, t: 0, n: 0 };
+      total += rec.c;
+      chartDays.push({ ts: ts, c: rec.c, t: rec.t || 0, n: rec.n || 0 });
     }
     var max = 0;
-    days.forEach(function (x) { if (x.c > max) max = x.c; });
-    box.innerHTML = days.map(function (x) {
-      var h = max ? Math.max(3, Math.round(x.c / max * 100)) : 3;
-      return '<div class="bar' + (x.c ? ' has' : '') + (x.today ? ' today' : '') +
-        '" style="height:' + h + '%" title="' + x.k + '  ' + money(x.c) + '"></div>';
+    chartDays.forEach(function (x) { if (x.c > max) max = x.c; });
+    box.innerHTML = chartDays.map(function (x) {
+      var h = max ? Math.max(4, Math.round(x.c / max * 100)) : 4;
+      return '<div class="bar' + (x.c ? ' has' : '') + '" style="height:' + h + '%" title="' + dayShort(x.ts) + '  ' + money(x.c) + '"></div>';
     }).join('');
+
+    var from = $('axisFrom'), to = $('axisTo');
+    if (from) from.textContent = dayShort(chartDays[0].ts);
+    if (to) to.textContent = '今天';
+
+    if (chartSel < 0) chartSel = 14;
+    paintChartSel();
+
     var note = $('chartNote');
-    if (note) note.textContent = '近 30 天合计 ' + money(total) + ' · 今天 ' + money(days[29].c);
+    if (note) note.textContent = '近 15 天合计 ' + money(total);
+
+    function scrub(e) {
+      var rect = box.getBoundingClientRect();
+      if (!rect.width) return;
+      var x = e.clientX - rect.left;
+      var idx = Math.floor(x / rect.width * chartDays.length);
+      idx = Math.max(0, Math.min(chartDays.length - 1, idx));
+      if (idx !== chartSel) {
+        chartSel = idx;
+        paintChartSel();
+        haptic();
+      }
+    }
+    var down = false;
+    box.onpointerdown = function (e) { down = true; scrub(e); try { box.setPointerCapture(e.pointerId); } catch (err) {} };
+    box.onpointermove = function (e) { if (down) scrub(e); };
+    box.onpointerup = function () { down = false; };
+    box.onpointercancel = function () { down = false; };
+    box.onpointerleave = function () { down = false; };
   }
 
   var EFFORTS = [
