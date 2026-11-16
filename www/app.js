@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.6.3';
+  var APP_VERSION = '3.6.4';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1133,6 +1133,12 @@
       setBusy(false);
     }
 
+    if (conv.ctxLimit && body.messages && body.messages.length > 2) {
+      if (estimateTokens(conv) > conv.ctxLimit * 0.9) {
+        body.messages = trimMessages(body.messages, conv.ctxLimit);
+      }
+    }
+
     var apiUrl = String(s.base || 'https://api.deepseek.com').replace(/\/+$/, '') + API_PATH;
     var headers = {
       'content-type': 'application/json',
@@ -1142,7 +1148,6 @@
     var hasDoc = JSON.stringify(body.messages).indexOf('"document"') >= 0;
     var betas = [];
     if (hasDoc) betas.push('files-api-2025-04-14');
-    if (estimateTokens(conv) > 28000) betas.push('context-1m-2025-08-07');
     if (betas.length) headers['anthropic-beta'] = betas.join(',');
 
     function sendOnce(b, allowRetry) {
@@ -1170,15 +1175,19 @@
             return sendOnce(b, false);
           }
           var m = String(txt).match(/exceeds max (\d+) tokens/i);
-          if (allowRetry && m && b.messages && b.messages.length > 2) {
+          if (m && parseInt(m[1], 10) > 1000) {
             var lim = parseInt(m[1], 10);
-            if (lim > 1000) {
-              conv.ctxLimit = lim;
+            conv.ctxLimit = lim;
+            save(true);
+            updateCtxRing();
+            if (allowRetry && b.messages && b.messages.length > 2) {
               b.messages = trimMessages(b.messages, lim);
-              save(true);
-              toast('上下文超过 ' + lim.toLocaleString() + '，已省略最早的对话重试');
+              toast('超出 ' + lim.toLocaleString() + ' 上限，已省略最早的对话重试');
               return sendOnce(b, false);
             }
+            var got = String(txt).match(/(\d+) tokens exceeds/i);
+            throw new Error('输入太长：' + (got ? '约 ' + got[1] + ' tokens，' : '') +
+              '模型上限是 ' + lim.toLocaleString() + ' tokens。请把内容分几段发，或去掉附件/长文本。');
           }
           throw new Error('HTTP ' + res.status + ' · ' + String(msg).slice(0, 200));
         });
@@ -1350,7 +1359,7 @@
         return;
       }
       if (isTextLike(file)) {
-        if (file.size > 512 * 1024) { toast('文本文件太大（限 512KB）'); return; }
+        if (file.size > 120 * 1024) { toast('文本文件太大（限 120KB）'); return; }
         var t = { kind: 'text', name: file.name, text: '', uploading: true };
         box.push(t);
         draw();
