@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '2.5.1';
+  var APP_VERSION = '2.6.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -47,7 +47,7 @@
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: PRESETS[0].text, think: true, search: true, effort: 'high',
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
-        avatar: { user: '', ai: '' }
+        avatar: { user: '', ai: '' }, agreed: false
       },
       conversations: [], activeId: null
     };
@@ -1198,6 +1198,15 @@
     });
   }
 
+  function showAgree() {
+    $('agreeSheet').classList.add('open');
+    $('scrim').classList.add('show');
+  }
+  function closeAgree() {
+    $('agreeSheet').classList.remove('open');
+    $('scrim').classList.remove('show');
+  }
+
   function openDrawer() {
     convQuery = '';
     var si = $('convSearch');
@@ -1622,6 +1631,16 @@
 
   /* ---------- 事件 ---------- */
   function bind() {
+    $('btnAgree').onclick = function () {
+      state.settings.agreed = true;
+      save(true);
+      closeAgree();
+      toast('随时可在设置 → 关于 里查看这些说明');
+    };
+    $('btnDisagree').onclick = function () {
+      if (window.App && window.App.exit) { try { window.App.exit(); return; } catch (e) {} }
+      toast('需要同意后才能使用');
+    };
     $('convSearch').oninput = function () {
       convQuery = this.value;
       document.querySelector('.drawer-search').classList.toggle('has', !!this.value);
@@ -1636,7 +1655,10 @@
     };
     $('btnMenu').onclick = openDrawer;
     $('btnCloseDrawer').onclick = closeDrawer;
-    $('scrim').onclick = function () { closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); closeCrop(); };
+    $('scrim').onclick = function () {
+      if ($('agreeSheet').classList.contains('open')) return;
+      closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); closeCrop();
+    };
     $('btnSettings').onclick = function () { closeDrawer(); openSheet(); };
     $('btnCloseSheet').onclick = closeSheet;
     $('btnEditClose').onclick = closeEdit;
@@ -1847,6 +1869,7 @@
     });
 
     window.__onBack = function () {
+      if ($('agreeSheet').classList.contains('open')) { return true; }
       if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
       if ($('cropSheet').classList.contains('open')) { closeCrop(); return true; }
       if ($('effortSheet').classList.contains('open')) { closeEffort(); return true; }
@@ -1877,6 +1900,7 @@
     applyTheme();
     renderMessages();
     updateHeader();
+    if (!state.settings.agreed) showAgree();
     $('drawerVer').textContent = 'v' + APP_VERSION;
     var h = new Date().getHours();
     document.querySelector('.empty h1').textContent =

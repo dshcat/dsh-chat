@@ -1,7 +1,18 @@
 # DeepChat
 
 一个给自己用的 Android 版 DeepSeek 客户端：WebView 壳 + 纯静态前端，无后端、无账号、无埋点。
-**非官方项目**，与深度求索公司无隶属关系。
+**非官方项目**，与深度求索（DeepSeek）公司无任何隶属、合作或授权关系。
+
+## 声明
+
+- 本项目只是一个 **API 调用客户端**：把你在界面上输入的内容，用你自己的 API Key 直接发到 `api.deepseek.com`。
+- **不托管密钥**：Key 只保存在设备本地（WebView localStorage），不上传、不经过任何服务器。
+- **不中转流量**：没有后端，开发者看不到对话内容，也无法读取或撤销你的 API 用量。
+- **不隶属官方**：不是 DeepSeek 官方应用，不代表其立场；对话内容由 DeepSeek 模型生成。
+- 费用由 Key 持有者在 DeepSeek 平台自行承担，使用时请一并遵守 DeepSeek 的服务条款。
+- 以 MIT 协议免费开源，按「现状」提供，不附带担保。
+
+首次启动会弹一次上述说明，同意后不再打扰。
 
 - 安装包约 37 KB
 - 包名 `com.dsh.deepchat`　minSdk 26（Android 8+）　targetSdk 34

@@ -537,3 +537,27 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .conv-snip mark{background:rgba(77,107,254,.28);color:var(--txt);border-radius:3px;padding:0 1px}
 .conv.hit .conv-title{color:var(--acc2)}
 .search-none{color:var(--dim2);font-size:12.5px;text-align:center;padding:36px 10px;line-height:1.7}
+
+/* ---------- 2.6 协议弹窗与链接 ---------- */
+.sheet.full{max-height:92dvh}
+.agree p{font-size:13.5px;line-height:1.7;color:var(--txt);margin:0 0 12px}
+.agree ul{margin:0 0 14px;padding-left:18px}
+.agree li{font-size:13px;line-height:1.75;color:var(--txt);margin-bottom:9px}
+.agree code{font-size:12px;background:var(--bg3);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.agree .dimtext{font-size:12px;color:var(--dim2)}
+.agree-actions{
+  display:flex;gap:10px;padding:12px 22px calc(env(safe-area-inset-bottom) + 16px);
+  border-top:1px solid var(--line);background:var(--bg2);
+}
+.agree-actions .mini{flex:0 0 34%;margin:0}
+.agree-actions .primary{flex:1}
+
+.linkrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.linkrow a{
+  font-size:12.5px;color:var(--acc2);text-decoration:none;padding:8px 12px;border-radius:10px;
+  background:var(--bg3);border:1px solid var(--line);
+}
+.getkey{
+  display:block;margin-top:10px;font-size:12.5px;color:var(--acc2);text-decoration:none;
+  padding:10px 12px;border-radius:11px;background:var(--acc-soft);border:1px solid var(--line);
+}

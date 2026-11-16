@@ -76,7 +76,7 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v2.51</div>
+    <div class="ver" id="drawerVer">v2.6</div>
   </div>
 </aside>
 
@@ -172,7 +172,10 @@
         <input id="setKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
         <button class="mini" id="btnEye">显示</button>
       </div>
-      <span class="note">只存在这台手机里，不会上传。</span>
+      <span class="note">只存在这台手机里，不会上传，也不经过任何中转服务器。</span>
+      <a class="getkey" href="https://platform.deepseek.com" target="_blank" rel="noreferrer">
+        还没有 Key？去 platform.deepseek.com 申请和充值 →
+      </a>
     </label>
 
     <div class="group">用量</div>
@@ -196,9 +199,17 @@
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.5.1</span></div>
-      <div class="aboutrow"><span>协议</span><span>MIT</span></div>
-      <p class="note">非官方第三方客户端，与深度求索公司无隶属关系。对话由 DeepSeek API 生成，请遵守其服务条款；API 费用由 Key 持有人自行承担。</p>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.6.0</span></div>
+      <div class="aboutrow"><span>性质</span><span>第三方客户端</span></div>
+      <div class="aboutrow"><span>协议</span><span>MIT · 免费开源</span></div>
+      <div class="aboutrow"><span>密钥</span><span>不托管 · 仅存本机</span></div>
+      <div class="aboutrow"><span>流量</span><span>不中转 · 直连官方</span></div>
+      <p class="note">本项目不隶属于深度求索（DeepSeek），与其无任何隶属、合作或授权关系，也不是官方应用。对话内容由 DeepSeek 模型生成，费用由 Key 持有人自行承担；使用本 App 即表示你同时遵守 DeepSeek 的服务条款。</p>
+      <div class="linkrow">
+        <a href="https://platform.deepseek.com" target="_blank" rel="noreferrer">申请 API Key</a>
+        <a href="https://api-docs.deepseek.com/zh-cn/" target="_blank" rel="noreferrer">API 文档</a>
+        <a href="https://api-docs.deepseek.com/zh-cn/quick_start/pricing/" target="_blank" rel="noreferrer">价格</a>
+      </div>
     </div>
 
   </div>
@@ -265,6 +276,28 @@
 <section class="sheet menu" id="effortSheet">
   <div class="grab"></div>
   <div class="menu-body" id="effortBody"></div>
+</section>
+
+<section class="sheet full" id="agreeSheet">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <div class="sheet-title">使用前请读一下</div>
+  </div>
+  <div class="sheet-body agree">
+    <p><b>DeepChat 是一个第三方 API 客户端</b>，只做一件事：把你输入的内容发给你自己的 DeepSeek API Key 对应的官方接口，再把回答显示出来。</p>
+    <ul>
+      <li>与深度求索（DeepSeek）<b>没有隶属、合作或授权关系</b>，不是官方应用，也不代表官方立场。</li>
+      <li><b>不托管你的 API Key。</b>Key 只存在这台手机上，请求由 App 直接发往 <code>api.deepseek.com</code>。</li>
+      <li><b>不中转流量、没有服务器。</b>开发者看不到你的对话内容，也无法读取或撤销你的 API 用量。</li>
+      <li>对话由 DeepSeek 模型生成，<b>费用由你在 DeepSeek 平台的账户承担</b>；使用时请一并遵守 DeepSeek 的服务条款。</li>
+      <li>本项目以 MIT 协议<b>免费开源</b>，按「现状」提供，不附带任何担保。</li>
+    </ul>
+    <p class="dimtext">点「同意并继续」表示你已理解以上说明。这个提示只出现一次。</p>
+  </div>
+  <div class="agree-actions">
+    <button class="mini" id="btnDisagree">不同意</button>
+    <button class="primary" id="btnAgree">同意并继续</button>
+  </div>
 </section>
 
 <div class="toast" id="toast"></div>
