@@ -1,11 +1,11 @@
-/* DeepChat 2.0 — 自用 / 可公开分发的移动端 DeepSeek 客户端
- * 无构建步骤。数据只存在本机。 */
+/* DeepChat 2.1 — 自用 / 可公开分发的移动端 DeepSeek 客户端
+ * 每个提问保留全部回答版本，可无限次编辑与重生成，用 ‹ n / m › 来回切。 */
 (function () {
   'use strict';
 
-  var LS = 'deepchat.v2';
-  var LS_OLD = 'deepchat.v1';
-  var APP_VERSION = '2.0.0';
+  var LS = 'deepchat.v3';
+  var LS_OLD = ['deepchat.v2', 'deepchat.v1'];
+  var APP_VERSION = '2.1.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 8192;
 
@@ -32,7 +32,7 @@
     edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>'
   };
 
-  var state = { settings: null, conversations: [], activeId: null, abort: null, streaming: false, live: null, editing: null };
+  var state = { settings: null, conversations: [], activeId: null, abort: null, streaming: false, editing: null };
 
   /* ---------- 存取 ---------- */
   function defaults() {
@@ -46,24 +46,64 @@
     };
   }
 
-  function migrateConversation(c) {
-    if (Array.isArray(c.turns)) return c;
-    var turns = [], pending = null;
-    (c.messages || []).forEach(function (m) {
-      if (m.role === 'user') {
-        pending = { id: uid(), user: { content: m.content, ts: m.ts || Date.now() }, variants: [], active: 0 };
-        turns.push(pending);
-      } else if (m.role === 'assistant' && pending) {
-        pending.variants.push({
-          ts: m.ts || Date.now(), text: m.text || '', thinking: m.thinking || '',
-          blocks: m.blocks || [], sources: m.sources || [], srcIndex: m.srcIndex || {},
-          tools: m.tools || [], usage: m.usage || null, cost: m.cost || 0, error: m.error || null
-        });
-        pending = null;
-      }
-    });
-    c.turns = turns;
-    delete c.messages;
+  function newAi() {
+    return {
+      ts: Date.now(), text: '', thinking: '', blocks: [], sources: [], srcIndex: {},
+      tools: [], usage: null, cost: 0, error: null, stopReason: null, streaming: false
+    };
+  }
+
+  function makeVersion(q, a) {
+    return { q: q || '', ts: Date.now(), a: a || newAi() };
+  }
+
+  function normalizeTurn(t) {
+    if (Array.isArray(t.versions) && t.versions.length) {
+      t.active = Math.min(t.active || 0, t.versions.length - 1);
+      return t;
+    }
+    var versions = [];
+    if (Array.isArray(t.variants)) {
+      // v2 结构：user + variants[]
+      var q = (t.user && t.user.content) || '';
+      t.variants.forEach(function (v) {
+        var a = Object.assign(newAi(), v);
+        versions.push({ q: q, ts: v.ts || Date.now(), a: a });
+      });
+    } else if (t.user) {
+      versions.push(makeVersion(t.user.content, newAi()));
+    }
+    if (!versions.length) versions.push(makeVersion('', newAi()));
+    t.versions = versions;
+    t.active = Math.min(t.active || 0, versions.length - 1);
+    delete t.user; delete t.variants;
+    return t;
+  }
+
+  function migrate(c) {
+    if (!Array.isArray(c.turns)) {
+      // v1：messages[] 平铺
+      var turns = [], pending = null;
+      (c.messages || []).forEach(function (m) {
+        if (m.role === 'user') {
+          pending = { id: uid(), active: 0, versions: [] };
+          pending.versions.push(makeVersion(m.content, newAi()));
+          turns.push(pending);
+        } else if (m.role === 'assistant' && pending) {
+          var a = Object.assign(newAi(), {
+            ts: m.ts, text: m.text || '', thinking: m.thinking || '', blocks: m.blocks || [],
+            sources: m.sources || [], srcIndex: m.srcIndex || {}, tools: m.tools || [],
+            usage: m.usage || null, cost: m.cost || 0, error: m.error || null
+          });
+          pending.versions[pending.versions.length - 1].a = a;
+          pending = null;
+        }
+      });
+      c.turns = turns;
+      delete c.messages;
+      return c;
+    }
+    c.turns.forEach(normalizeTurn);
     return c;
   }
 
@@ -71,14 +111,16 @@
     var d = defaults(), raw = null;
     try { raw = localStorage.getItem(LS); } catch (e) {}
     if (!raw) {
-      try { raw = localStorage.getItem(LS_OLD); } catch (e) {}
+      for (var i = 0; i < LS_OLD.length && !raw; i++) {
+        try { raw = localStorage.getItem(LS_OLD[i]); } catch (e) {}
+      }
     }
     state.settings = d.settings;
     if (!raw) return;
     try {
       var o = JSON.parse(raw);
       state.settings = Object.assign(d.settings, o.settings || {});
-      state.conversations = (o.conversations || []).map(migrateConversation);
+      state.conversations = (o.conversations || []).map(migrate);
       state.activeId = o.activeId || null;
     } catch (e) {}
     if (!state.settings.bg) state.settings.bg = { kind: 'none' };
@@ -93,9 +135,7 @@
         localStorage.setItem(LS, JSON.stringify({
           settings: state.settings, conversations: state.conversations, activeId: state.activeId
         }));
-      } catch (e) {
-        toast('本地空间满了，背景图可能太大');
-      }
+      } catch (e) { toast('本地空间满了，背景图可能太大'); }
     }
     clearTimeout(saveTimer);
     if (now) { write(); return; }
@@ -194,8 +234,9 @@
     });
 
     var pick = document.createElement('label');
-    pick.className = 'sw pick' + (b.kind === 'color' && BG_PRESETS.indexOf(b.color) < 0 ? ' active' : '');
-    pick.style.background = (b.kind === 'color' && BG_PRESETS.indexOf(b.color) < 0) ? b.color : 'var(--bg2)';
+    var custom = b.kind === 'color' && BG_PRESETS.indexOf(b.color) < 0;
+    pick.className = 'sw pick' + (custom ? ' active' : '');
+    pick.style.background = custom ? b.color : 'var(--bg2)';
     pick.innerHTML = '<span>+</span><input type="color" id="bgColor" value="' + ((b.kind === 'color' && b.color) || '#22303c') + '">';
     pick.querySelector('input').oninput = function () {
       state.settings.bg = { kind: 'color', color: this.value };
@@ -313,16 +354,15 @@
     return t.length > 20 ? t.slice(0, 20) + '…' : (t || '新对话');
   }
 
-  function newVariant() {
-    return {
-      ts: Date.now(), text: '', thinking: '', blocks: [], sources: [], srcIndex: {},
-      tools: [], usage: null, cost: 0, error: null, stopReason: null, streaming: true
-    };
+  function curVersion(turn) {
+    if (!turn.versions || !turn.versions.length) return null;
+    var i = Math.min(Math.max(turn.active || 0, 0), turn.versions.length - 1);
+    return turn.versions[i];
   }
 
-  function activeVariant(turn) {
-    if (!turn.variants || !turn.variants.length) return null;
-    return turn.variants[Math.min(turn.active || 0, turn.variants.length - 1)];
+  function withAi(turn, fn) {
+    var v = curVersion(turn);
+    if (v && v.a) fn(v.a, v);
   }
 
   function sourceAdd(ai, item) {
@@ -349,7 +389,8 @@
   }
 
   function aiInner(turn) {
-    var ai = activeVariant(turn);
+    var v = curVersion(turn);
+    var ai = v ? v.a : null;
     if (!ai) return '<div class="ai-head"><div class="avatar"><div class="spinner"></div></div><span>等待生成</span></div>';
 
     var h = '';
@@ -360,7 +401,7 @@
     if (ai.thinking) {
       h += '<details class="think"' + (ai._thinkOpen ? ' open' : '') + ' data-act="think" data-turn="' + turn.id + '">' +
         '<summary><span class="chev">▶</span>' + (ai.streaming && !ai.text ? '深度思考中…' : '已深度思考') +
-        '<span style="color:var(--dim2)">· ' + ai.thinking.length + ' 字</span></summary>' +
+        '<span class="dim">· ' + ai.thinking.length + ' 字</span></summary>' +
         '<div class="thinkbody">' + esc(ai.thinking) + '</div></details>';
     }
 
@@ -398,36 +439,35 @@
 
     if (!ai.streaming) {
       var meta = [];
-      if (ai.usage) meta.push('入 ' + fmtNum((ai.usage.input_tokens || 0) + (ai.usage.cache_read_input_tokens || 0)) + ' · 出 ' + fmtNum(ai.usage.output_tokens || 0));
+      if (ai.usage) meta.push(fmtNum((ai.usage.input_tokens || 0) + (ai.usage.cache_read_input_tokens || 0)) + ' in · ' + fmtNum(ai.usage.output_tokens || 0) + ' out');
       if (ai.cost) meta.push(money(ai.cost));
-      h += '<div class="meta"><span>' + meta.join(' · ') + '</span>' +
-        '<button data-act="copy" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
-        '<button data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + '重新生成</button></div>';
-    }
 
-    var n = (turn.variants || []).length;
-    if (n > 1 && !ai.streaming) {
+      var n = (turn.versions || []).length;
       var idx = (turn.active || 0) + 1;
-      h += '<div class="vers">' +
-        '<button data-act="vprev" data-turn="' + turn.id + '"' + (idx <= 1 ? ' disabled' : '') + '>‹</button>' +
+      h += '<div class="foot">';
+      h += '<span class="fmeta">' + (meta.join(' · ') || '') + '</span>';
+      h += '<span class="fact">' +
+        '<button data-act="copy" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
+        '<button data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + '重新生成</button>' +
+        '</span>';
+      h += '<span class="vers">' +
+        '<button data-act="vprev" data-turn="' + turn.id + '"' + (idx <= 1 ? ' disabled' : '') + ' aria-label="上一版">‹</button>' +
         '<span class="vnum">' + idx + ' / ' + n + '</span>' +
-        '<button data-act="vnext" data-turn="' + turn.id + '"' + (idx >= n ? ' disabled' : '') + '>›</button>' +
-        '<span class="vsep"></span>' +
-        '<button class="vregen" data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + '再来一版</button>' +
-        '</div>';
+        '<button data-act="vnext" data-turn="' + turn.id + '"' + (idx >= n ? ' disabled' : '') + ' aria-label="下一版">›</button>' +
+        '</span>';
+      h += '</div>';
     }
     return h;
   }
 
   function turnNode(turn) {
+    var v = curVersion(turn);
     var wrap = document.createElement('div');
     wrap.className = 'turn';
     wrap.dataset.turn = turn.id;
-    var ai = activeVariant(turn);
-    if (ai) ai._id = ai._id || (turn.id + '_' + (turn.active || 0));
-
     wrap.innerHTML =
-      '<div class="msg user"><div class="body">' + esc(turn.user.content) + '</div>' +
+      '<div class="msg user">' +
+      '<div class="body">' + esc(v ? v.q : '') + '</div>' +
       '<div class="uact">' +
       '<button data-act="edit" data-turn="' + turn.id + '">' + ICON.edit + '编辑</button>' +
       '<button data-act="copyu" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
@@ -455,7 +495,7 @@
     var t = 0;
     state.conversations.forEach(function (c) {
       (c.turns || []).forEach(function (turn) {
-        (turn.variants || []).forEach(function (v) { if (v.cost) t += v.cost; });
+        (turn.versions || []).forEach(function (v) { if (v.a && v.a.cost) t += v.a.cost; });
       });
     });
     return t;
@@ -486,12 +526,12 @@
   function apiMessages(conv, excludeTurn) {
     var out = [];
     (conv.turns || []).forEach(function (t) {
-      out.push({ role: 'user', content: t.user.content });
-      if (t === excludeTurn) return;
-      var v = activeVariant(t);
+      var v = curVersion(t);
       if (!v) return;
-      if (v.blocks && v.blocks.length) out.push({ role: 'assistant', content: v.blocks });
-      else if (v.text) out.push({ role: 'assistant', content: [{ type: 'text', text: v.text }] });
+      out.push({ role: 'user', content: v.q });
+      if (t === excludeTurn) return;
+      if (v.a.blocks && v.a.blocks.length) out.push({ role: 'assistant', content: v.a.blocks });
+      else if (v.a.text) out.push({ role: 'assistant', content: [{ type: 'text', text: v.a.text }] });
     });
     return out;
   }
@@ -561,9 +601,9 @@
 
   function runStream(conv, turn) {
     var s = state.settings;
-    var ai = turn.variants[turn.variants.length - 1];
+    var v = curVersion(turn);
+    var ai = v.a;
     ai.streaming = true;
-    ai._id = turn.id + '_' + (turn.variants.length - 1);
 
     state.streaming = true;
     state.abort = new AbortController();
@@ -679,16 +719,13 @@
     if (state.streaming) return;
 
     var conv = ensureConv();
-    var turn = { id: uid(), user: { content: text, ts: Date.now() }, variants: [], active: 0 };
+    var turn = { id: uid(), active: 0, versions: [makeVersion(text, newAi())] };
     conv.turns.push(turn);
     if (conv.turns.length === 1) conv.title = convTitleOf(text);
     conv.updatedAt = Date.now();
     $('input').value = '';
     autoGrow();
     save(true);
-
-    turn.variants.push(newVariant());
-    turn.active = 0;
     runStream(conv, turn);
   }
 
@@ -697,16 +734,27 @@
     if (!state.settings.apiKey) { openSheet(); return; }
     var conv = activeConv();
     if (!conv) return;
-    turn.variants.push(newVariant());
-    turn.active = turn.variants.length - 1;
+    var v = curVersion(turn);
+    turn.versions.push(makeVersion(v ? v.q : '', newAi()));
+    turn.active = turn.versions.length - 1;
     conv.updatedAt = Date.now();
     save(true);
     runStream(conv, turn);
   }
 
-  function switchVariant(turn, delta) {
-    if (state.streaming) return;
-    var n = turn.variants.length;
+  function editAndRegenerate(turn, text) {
+    var conv = activeConv();
+    if (!conv) return;
+    turn.versions.push(makeVersion(text, newAi()));
+    turn.active = turn.versions.length - 1;
+    conv.updatedAt = Date.now();
+    save(true);
+    runStream(conv, turn);
+  }
+
+  function switchVersion(turn, delta) {
+    if (state.streaming) { toast('这条还在生成'); return; }
+    var n = turn.versions.length;
     var i = (turn.active || 0) + delta;
     if (i < 0 || i >= n) return;
     turn.active = i;
@@ -736,17 +784,25 @@
   function closeSheet() { $('sheet').classList.remove('open'); $('scrim').classList.remove('show'); }
   function openEdit(turn) {
     state.editing = turn;
-    $('editText').value = turn.user.content;
+    $('editText').value = curVersion(turn).q;
     $('editSheet').classList.add('open');
     $('scrim').classList.add('show');
-    setTimeout(function () { $('editText').focus(); }, 120);
+    setTimeout(function () { $('editText').focus(); }, 150);
   }
   function closeEdit() { $('editSheet').classList.remove('open'); $('scrim').classList.remove('show'); state.editing = null; }
+
+  function renderModelCards() {
+    var box = $('modelCards');
+    if (!box) return;
+    var cards = box.querySelectorAll('.modelcard');
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].classList.toggle('active', cards[i].getAttribute('data-model') === state.settings.model);
+    }
+  }
 
   function fillSheet() {
     var s = state.settings;
     $('setKey').value = s.apiKey || '';
-    $('setModel').value = s.model;
     $('setSystem').value = s.system || '';
     $('setThink').checked = !!s.think;
     $('setSearch').checked = !!s.search;
@@ -754,12 +810,15 @@
     applyTheme();
     renderPresets();
     renderSwatches();
+    renderModelCards();
 
     var msgs = 0, cost = 0, tok = 0;
     state.conversations.forEach(function (c) {
       (c.turns || []).forEach(function (t) {
         msgs += 1;
-        (t.variants || []).forEach(function (m) { if (m.usage) tok += (m.usage.input_tokens || 0) + (m.usage.cache_read_input_tokens || 0) + (m.usage.output_tokens || 0); });
+        (t.versions || []).forEach(function (v) {
+          if (v.a && v.a.usage) tok += (v.a.usage.input_tokens || 0) + (v.a.usage.cache_read_input_tokens || 0) + (v.a.usage.output_tokens || 0);
+        });
       });
     });
     cost = totalCost();
@@ -845,6 +904,7 @@
     $('btnSettings').onclick = function () { closeDrawer(); openSheet(); };
     $('btnCloseSheet').onclick = closeSheet;
     $('btnEditClose').onclick = closeEdit;
+    $('btnEditCancel').onclick = closeEdit;
     $('btnNew').onclick = newChat;
     $('btnNew2').onclick = function () { newChat(); closeDrawer(); };
     $('emptyHint').onclick = openSheet;
@@ -870,17 +930,16 @@
       var act = t.getAttribute('data-act');
       var turn = findTurn(t.getAttribute('data-turn'));
       if (act === 'think') {
-        var ai = turn && activeVariant(turn);
-        if (ai) ai._thinkOpen = !ai._thinkOpen;
+        if (turn) withAi(turn, function (ai) { ai._thinkOpen = !ai._thinkOpen; });
         return;
       }
       if (!turn) return;
-      if (act === 'copy') { var v = activeVariant(turn); copyText(v ? v.text : ''); return; }
-      if (act === 'copyu') { copyText(turn.user.content); return; }
+      if (act === 'copy') { withAi(turn, function (ai) { copyText(ai.text); }); return; }
+      if (act === 'copyu') { copyText(curVersion(turn).q); return; }
       if (act === 'edit') { openEdit(turn); return; }
       if (act === 'regen') { regenerate(turn); return; }
-      if (act === 'vprev') { switchVariant(turn, -1); return; }
-      if (act === 'vnext') { switchVariant(turn, 1); return; }
+      if (act === 'vprev') { switchVersion(turn, -1); return; }
+      if (act === 'vnext') { switchVersion(turn, 1); return; }
     });
 
     $('btnEditSave').onclick = function () {
@@ -888,12 +947,8 @@
       if (!turn) { closeEdit(); return; }
       var txt = $('editText').value.trim();
       if (!txt) { toast('内容不能为空'); return; }
-      turn.user.content = txt;
-      turn.variants = [];
-      turn.active = 0;
       closeEdit();
-      save(true);
-      regenerate(turn);
+      editAndRegenerate(turn, txt);
     };
 
     $('convlist').addEventListener('click', function (e) {
@@ -919,9 +974,7 @@
       }
     });
 
-    // 主题
-    var seg = $('themeSeg');
-    seg.addEventListener('click', function (e) {
+    $('themeSeg').addEventListener('click', function (e) {
       var b = e.target.closest('button');
       if (!b) return;
       state.settings.theme = b.getAttribute('data-theme');
@@ -929,7 +982,16 @@
       applyTheme();
     });
 
-    // 背景
+    $('modelCards').addEventListener('click', function (e) {
+      var card = e.target.closest('.modelcard');
+      if (!card) return;
+      state.settings.model = card.getAttribute('data-model');
+      save(true);
+      renderModelCards();
+      updateHeader();
+      haptic();
+    });
+
     $('bgFile').onchange = function () {
       pickBackgroundImage(this.files && this.files[0]);
       this.value = '';
@@ -940,7 +1002,6 @@
     };
 
     $('setKey').oninput = function () { state.settings.apiKey = this.value.trim(); save(); };
-    $('setModel').onchange = function () { state.settings.model = this.value; save(); updateHeader(); };
     $('setSystem').oninput = function () { state.settings.system = this.value; save(); renderPresets(); };
     $('setThink').onchange = function () { state.settings.think = this.checked; save(); updateHeader(); };
     $('setSearch').onchange = function () { state.settings.search = this.checked; save(); updateHeader(); };

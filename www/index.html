@@ -66,12 +66,13 @@
   <div class="convlist" id="convlist"></div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
-    <div class="ver" id="drawerVer">v2.0</div>
+    <div class="ver" id="drawerVer">v2.1</div>
   </div>
 </aside>
 
 <!-- 设置 -->
 <section class="sheet" id="sheet">
+  <div class="grab"></div>
   <div class="sheet-head">
     <div class="sheet-title">设置</div>
     <button class="iconbtn small" id="btnCloseSheet" aria-label="关闭">
@@ -95,23 +96,23 @@
       <span class="label">背景</span>
       <div class="swatches" id="swatches"></div>
       <div class="btnrow">
-        <label class="mini filelabel">选张图<input type="file" id="bgFile" accept="image/*"></label>
+        <label class="mini">选张图<input type="file" id="bgFile" accept="image/*"></label>
         <button class="mini" id="btnBgClear">清除背景</button>
       </div>
-      <span class="note">图片会压缩后只存在本机，不会上传。</span>
+      <span class="note">图片压缩后只存在本机；换成纯色更省心。</span>
     </div>
 
     <div class="group">模型</div>
-
-    <label class="field">
-      <span class="label">模型</span>
-      <div class="selwrap">
-        <select id="setModel">
-          <option value="deepseek-flash">deepseek-flash · 便宜够用</option>
-          <option value="deepseek-v4-pro">deepseek-v4-pro · 更聪明更贵</option>
-        </select>
-      </div>
-    </label>
+    <div class="modelcards" id="modelCards">
+      <button class="modelcard" data-model="deepseek-flash">
+        <div class="mc-main"><span class="mc-name">deepseek-flash</span><span class="mc-desc">便宜够用 · 日常首选</span></div>
+        <span class="mc-tick"></span>
+      </button>
+      <button class="modelcard" data-model="deepseek-v4-pro">
+        <div class="mc-main"><span class="mc-name">deepseek-v4-pro</span><span class="mc-desc">更聪明 · 贵约 4 倍</span></div>
+        <span class="mc-tick"></span>
+      </button>
+    </div>
 
     <div class="field rowfield">
       <div>
@@ -123,7 +124,7 @@
     <div class="field rowfield">
       <div>
         <span class="label">默认联网</span>
-        <span class="note">按次额外计费，开发时可关</span>
+        <span class="note">按次额外计费</span>
       </div>
       <label class="switch"><input type="checkbox" id="setSearch"><i></i></label>
     </div>
@@ -142,20 +143,18 @@
         <input id="setKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
         <button class="mini" id="btnEye">显示</button>
       </div>
-      <span class="note">只存在这台手机里，不会上传到任何服务器。</span>
+      <span class="note">只存在这台手机里，不会上传。</span>
     </label>
 
     <div class="group">数据</div>
     <div class="field">
-      <div class="btnrow">
-        <button class="danger" id="btnClear">清空所有对话</button>
-      </div>
+      <button class="danger" id="btnClear">清空所有对话</button>
       <span class="note" id="usageNote">—</span>
     </div>
 
     <div class="group">关于</div>
     <div class="field about">
-      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.0.0</span></div>
+      <div class="aboutrow"><span>版本</span><span id="aboutVer">2.1.0</span></div>
       <div class="aboutrow"><span>协议</span><span>MIT</span></div>
       <p class="note">非官方第三方客户端，与深度求索公司无隶属关系。对话由 DeepSeek API 生成，请遵守其服务条款；API 费用由 Key 持有人自行承担。</p>
     </div>
@@ -165,16 +164,19 @@
 
 <!-- 编辑消息 -->
 <section class="sheet" id="editSheet">
+  <div class="grab"></div>
   <div class="sheet-head">
-    <div class="sheet-title">编辑后重新生成</div>
+    <div class="sheet-title">编辑这条提问</div>
     <button class="iconbtn small" id="btnEditClose" aria-label="关闭">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </div>
   <div class="sheet-body">
-    <textarea id="editText" rows="6" spellcheck="false"></textarea>
-    <div class="btnrow" style="margin-top:12px">
-      <button class="primary" id="btnEditSave">保存并重新生成</button>
+    <textarea id="editText" rows="4" spellcheck="false"></textarea>
+    <p class="note">保存后原来那版会留着，新回答作为新版本，用 `‹ ›` 随时切回。</p>
+    <div class="btnrow">
+      <button class="mini wide" id="btnEditCancel">取消</button>
+      <button class="primary" id="btnEditSave">保存并生成</button>
     </div>
   </div>
 </section>
