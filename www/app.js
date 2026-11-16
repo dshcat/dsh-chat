@@ -1055,14 +1055,40 @@
     });
   }
 
-  function trimMessages(msgs, limit) {
-    function est(list) {
-      var c = 0;
-      for (var i = 0; i < list.length; i++) c += JSON.stringify(list[i]).length;
-      return c / 2.2;
+  var REQUEST_BUDGET = 32000;
+
+  function tokensOfText(str) {
+    if (!str) return 0;
+    var cjk = 0, other = 0;
+    for (var i = 0; i < str.length; i++) {
+      if (str.charCodeAt(i) > 0x2e7f) cjk++; else other++;
     }
+    return Math.ceil(cjk / 1.5 + other / 3.6) + 4;
+  }
+
+  function tokensOfMessages(msgs) {
+    var t = 0;
+    (msgs || []).forEach(function (m) {
+      if (typeof m.content === 'string') { t += tokensOfText(m.content); return; }
+      (m.content || []).forEach(function (b) {
+        if (!b) return;
+        if (b.type === 'text') t += tokensOfText(b.text);
+        else if (b.type === 'image') t += 800;
+        else if (b.type === 'document') t += 3000;
+        else t += tokensOfText(JSON.stringify(b));
+      });
+    });
+    return t;
+  }
+
+  function requestBudget(conv) {
+    var lim = (conv && conv.ctxLimit) || REQUEST_BUDGET;
+    return Math.min(lim, REQUEST_BUDGET);
+  }
+
+  function trimMessages(msgs, limit) {
     var guard = 0;
-    while (msgs.length > 2 && est(msgs) > limit * 0.85 && guard++ < 300) {
+    while (msgs.length > 2 && tokensOfMessages(msgs) > limit * 0.88 && guard++ < 300) {
       msgs.shift();
       if (msgs.length && msgs[0].role !== 'user') msgs.shift();
     }
@@ -1102,6 +1128,13 @@
     var sysText = effSystem(conv);
     if (sysText && sysText.trim()) body.system = sysText.trim();
     body.temperature = effTemperature(conv);
+
+    var budget = requestBudget(conv);
+    if (tokensOfMessages(body.messages) > budget * 0.88) {
+      trimMessages(body.messages, budget);
+      body.system = (body.system ? body.system + '\n\n' : '') + '（更早的对话因长度限制已省略。）';
+      toast(tokensOfMessages(body.messages) > budget * 0.88 ? '内容仍然偏长，已尽量精简' : '已省略较早的对话以适配上下文');
+    }
     if (s.search) body.tools = [
       { type: 'deepseek_web_search', name: 'deepseek_web_search' },
       { type: 'deepseek_read_url', name: 'deepseek_read_url' }
@@ -1398,6 +1431,13 @@
       return;
     }
     var conv = ensureConv();
+    var budget = requestBudget(conv);
+    if (tokensOfText(text) > budget * 0.85) {
+      var keep = Math.floor(budget * 0.85 * 1.5);
+      var cut = text.length - keep;
+      text = text.slice(0, keep) + '\n\n…（内容过长，已自动截断 ' + cut + ' 字）';
+      toast('这条太长，已截断到上限内发送');
+    }
     var q0 = makeQuestion(text);
     q0.files = pending.filter(function (f) { return f.kind === 'image' ? !!f.data : f.kind === 'text' ? !!f.text : !!f.fileId; });
     if (!text && q0.files.length) q0.title = '图片 · ' + q0.files[0].name;
