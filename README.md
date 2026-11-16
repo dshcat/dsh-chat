@@ -18,6 +18,10 @@
 - 包名 `com.dsh.deepchat`　minSdk 26（Android 8+）　targetSdk 34
 - MIT 协议，可自由修改、分发
 
+## 项目总结
+
+从 1.0 到 3.6.0 的完整演进、设计取舍与适合人群，见 [SUMMARY.md](SUMMARY.md)。
+
 ## 功能
 
 **对话**
