@@ -340,6 +340,10 @@
     '命中': 'Hit', '未命中': 'Miss', '输出': 'Output', '思考': 'Thinking', '次': 'runs',
     '合计': 'Total', '旧记录无拆分': 'no breakdown for old records',
     '今天': 'Today', '昨天': 'Yesterday',
+    '新对话': 'New chat', '夜深了': 'Late night', '早上好': 'Good morning', '中午好': 'Good afternoon',
+    '下午好': 'Good afternoon', '晚上好': 'Good evening',
+    '说点什么，或者直接问我。': 'Say something, or just ask.',
+    '先到设置里填上 DeepSeek API Key，然后随便聊。': 'Add your DeepSeek API key in Settings to start.',
     '已清空用量记录': 'Usage log cleared', '已清空': 'Cleared', '已删除': 'Deleted',
     '已恢复': 'Restored', '已复制': 'Copied', '已取消收藏': 'Starred removed',
     '先选几条对话': 'Select some chats first', '已恢复默认头像': 'Default avatar restored',
@@ -950,7 +954,7 @@
 
   function updateHeader() {
     var conv = activeConv(), s = state.settings;
-    $('chatTitle').textContent = conv ? conv.title : '新对话';
+    $('chatTitle').textContent = conv ? conv.title : T('新对话');
     $('chatSub').textContent = [s.model, s.think ? '思考' : '快答', s.search ? '联网' : '不联网'].join(' · ');
     $('chipSearch').classList.toggle('on', !!s.search);
     syncEffortUI();
@@ -1888,6 +1892,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.0.0', d: '2026-11-17', items: ['New illustrated app icon', 'English gaps fixed: New chat, greetings, empty state, usage line', 'First public release'] },
         { v: '3.10.1', d: '2026-11-17', items: ['Toasts stay visible 2.6s, important ones 4.6s', 'Toasts and dialogs show an English sub-line in English mode'] },
         { v: '3.10.0', d: '2026-11-17', items: ['Usage log keeps 30 days, fixed-height scroll area, searchable', 'Old records without breakdown still show total tokens', 'Full English UI, including notices and changelog'] },
         { v: '3.9.0', d: '2026-11-17', items: ['System prompt is empty by default', 'Removed starter suggestion cards', 'Usage replaced by a searchable daily ledger', 'Back button no longer exits the app from a sheet'] },
@@ -1905,6 +1910,7 @@
       return;
     }
     var logs = [
+      { v: '4.0.0', d: '2026-11-17', items: ['全新封面图标（插画风）', '补齐英文：新对话、问候语、空状态、用量统计行', '作为首个公开版本发布'] },
       { v: '3.10.1', d: '2026-11-17', items: ['提示停留时间延长到 2.6 秒，重要提示 4.6 秒', '英文模式下提示与确认框附带英文小字'] },
       { v: '3.10.0', d: '2026-11-17', items: ['用量只保留 30 天，固定高度区域内滑动与搜索', '旧记录没有拆分时改为显示总 token 数', '英文界面补全，包含用户须知与更新公告'] },
       { v: '3.9.0', d: '2026-11-17', items: ['提示词默认留空，不再自动填预设', '开篇去掉三条示例问题', '用量改为可按日期搜索的明细列表（命中/未命中/输出/思考/金额）', '修复部分面板按返回键直接退出 App 的问题'] },
@@ -2196,7 +2202,7 @@
           '<span class="uday-c">' + money(r.c) + '</span></div>' +
           '<div class="uday-t">' +
           (r.hit == null && r.miss == null && r.out == null
-            ? '<span class="u">合计 ' + fmtNum(r.t || 0) + ' tokens（旧记录无拆分）</span>'
+            ? '<span class="u">' + (state.settings.lang === 'en' ? 'Total ' + fmtNum(r.t || 0) + ' tokens (old record)' : '合计 ' + fmtNum(r.t || 0) + ' tokens（旧记录无拆分）') + '</span>'
             : '<span class="u"><i class="ud hit"></i>' + T('命中') + ' ' + fmtNum(r.hit || 0) + '</span>' +
               '<span class="u"><i class="ud miss"></i>' + T('未命中') + ' ' + fmtNum(r.miss || 0) + '</span>' +
               '<span class="u"><i class="ud out"></i>' + T('输出') + ' ' + fmtNum(r.out || 0) + '</span>' +
@@ -2536,7 +2542,9 @@
       });
     });
     cost = totalCost();
-    $('usageNote').textContent = state.conversations.length + ' 个对话 · ' + turns + ' 条提问 · ' + fmtNum(tok) + ' tokens · 累计 ' + money(cost);
+    $('usageNote').textContent = (state.settings.lang === 'en')
+      ? (state.conversations.length + ' chats · ' + turns + ' questions · ' + fmtNum(tok) + ' tokens · total ' + money(cost))
+      : (state.conversations.length + ' 个对话 · ' + turns + ' 条提问 · ' + fmtNum(tok) + ' tokens · 累计 ' + money(cost));
   }
 
   function renderPresets() {
@@ -3217,8 +3225,8 @@
     $('drawerVer').textContent = 'v' + APP_VERSION;
     var h = new Date().getHours();
     document.querySelector('.empty h1').textContent =
-      h < 6 ? '夜深了' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 19 ? '下午好' : '晚上好';
-    $('emptyHint').textContent = state.settings.apiKey ? '说点什么，或者直接问我。' : '先到设置里填上 DeepSeek API Key，然后随便聊。';
+      T(h < 6 ? '夜深了' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 19 ? '下午好' : '晚上好');
+    $('emptyHint').textContent = state.settings.apiKey ? T('说点什么，或者直接问我。') : T('先到设置里填上 DeepSeek API Key，然后随便聊。');
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
