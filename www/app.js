@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '4.2.0';
+  var APP_VERSION = '4.2.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -48,7 +48,7 @@
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: '', think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
-        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false, autoCompact: true, logo: ''
+        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false, autoCompact: true, logo: '', compressImage: true
       },
       conversations: [], activeId: null
     };
@@ -884,7 +884,7 @@
       '<div class="ubox">' +
       (q && q.files && q.files.some(function (f) { return f.kind === 'image'; })
         ? '<div class="uatt">' + q.files.filter(function (f) { return f.kind === 'image'; }).map(function (f) {
-          return '<img src="data:image/jpeg;base64,' + f.data + '" data-full="data:image/jpeg;base64,' + f.data + '" alt="">';
+          return '<img src="data:' + (f.media || 'image/jpeg') + ';base64,' + f.data + '" data-full="data:' + (f.media || 'image/jpeg') + ';base64,' + f.data + '" alt="">';
         }).join('') + '</div>' : '') +
       (q && q.files && q.files.some(function (f) { return f.kind !== 'image'; })
         ? '<div class="ufiles">' + q.files.filter(function (f) { return f.kind !== 'image'; }).map(function (f) {
@@ -1509,7 +1509,7 @@
       var d = document.createElement('div');
       d.className = 'att' + (f.uploading ? ' uploading' : '');
       var head = f.kind === 'image' && f.data
-        ? '<img class="thumb" src="data:image/jpeg;base64,' + f.data + '" alt="">'
+        ? '<img class="thumb" src="data:' + (f.media || 'image/jpeg') + ';base64,' + f.data + '" alt="">'
         : '<span class="ficon">' + (f.uploading ? '<span class="spin2"></span>' : ICON.link) + '</span>';
       d.innerHTML = head + '<span class="nm">' + esc(f.name) + '</span>' +
         '<button class="rm" data-rm="' + i + '">✕</button>';
@@ -1587,9 +1587,25 @@
     arr.slice(0, 20).forEach(function (file) {
       if (box.length >= 20) return;
       if (/^image\//.test(file.type || '')) {
-        var item = { kind: 'image', name: file.name || '图片', media: 'image/jpeg', uploading: true };
+        var item = { kind: 'image', name: file.name || '图片', media: file.type || 'image/jpeg', uploading: true };
         box.push(item);
         draw();
+        if (state.settings.compressImage === false) {
+          var rawFr = new FileReader();
+          rawFr.onload = function () {
+            var dataUrl = String(rawFr.result || '');
+            var comma = dataUrl.indexOf(',');
+            if (comma < 0) { dropItem(box, item); draw(); toast('图片读取失败'); return; }
+            var head = dataUrl.slice(5, dataUrl.indexOf(';'));
+            item.media = head || 'image/jpeg';
+            item.data = dataUrl.slice(comma + 1);
+            item.uploading = false;
+            draw();
+          };
+          rawFr.onerror = function () { dropItem(box, item); draw(); };
+          rawFr.readAsDataURL(file);
+          return;
+        }
         resizeImage(file, function (b64) {
           if (!b64) { dropItem(box, item); draw(); toast('图片读取失败'); return; }
           item.data = b64;
@@ -1983,6 +1999,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.2.1', d: '2026-11-17', items: ['New "Compress images" switch: turn off to send originals', 'Images now keep their real format (png/webp no longer sent as jpeg)'] },
         { v: '4.2.0', d: '2026-11-17', items: ['Thinking output can be scrolled while streaming', 'New App icon setting: use any image for the start screen and default AI avatar', 'Version number in About now always reflects the build'] },
         { v: '4.1.0', d: '2026-11-17', items: ['Chat data moved from localStorage to IndexedDB: from 5MB to hundreds of MB', 'Existing data is migrated automatically on first launch', 'Settings stay in localStorage (tiny)'] },
         { v: '4.0.1', d: '2026-11-17', items: ['Fixed the repeated "storage full" toast when switching chats: now shown once with an accurate message', 'Image compression lowered from 1400px to 1024px to save local space', 'Changelog now covers every change since 3.10.0'] },
@@ -2004,6 +2021,7 @@
       return;
     }
     var logs = [
+      { v: '4.2.1', d: '2026-11-17', items: ['新增「压缩图片」开关：关掉后按原图发送', '图片显示与上传使用真实格式（png / webp 不再被当成 jpeg）'] },
       { v: '4.2.0', d: '2026-11-17', items: ['流式生成时可以拖动查看思考内容，不再被刷新打断', '新增「应用图标」设置：可换成任意图片，启动页与 AI 默认头像同步', '修复关于页版本号显示不更新的问题'] },
       { v: '4.1.0', d: '2026-11-17', items: ['对话正文从 localStorage 迁到 IndexedDB，容量从 5MB 提升到数百 MB', '首次启动自动迁移旧数据，旧键会被清理', '设置仍留在 localStorage，体积很小'] },
       { v: '4.0.1', d: '2026-11-17', items: ['修复切换对话时反复弹出的「本地空间满了」提示：改为只提示一次，并说明准确原因', '图片压缩从 1400px 降到 1024px，减少本地占用', '更新公告补齐 3.10.0 以后的全部改动'] },
@@ -2638,6 +2656,7 @@
     $('setHideUsage').checked = !!s.hideUsage;
     $('setDummy').checked = !!s.dummy;
     $('setAutoCompact').checked = s.autoCompact !== false;
+    $('setCompress').checked = s.compressImage !== false;
     $('archiveCount').textContent = String(archivedConvs().length);
     var gt = typeof s.temperature === 'number' ? s.temperature : 1;
     $('setTemp').value = String(Math.round(gt * 10));
@@ -2809,6 +2828,10 @@
       usageQuery = this.value;
       clearTimeout(window.__uq);
       window.__uq = setTimeout(renderUsageList, 120);
+    };
+    $('setCompress').onchange = function () {
+      state.settings.compressImage = this.checked;
+      save(true);
     };
     $('setAutoCompact').onchange = function () {
       state.settings.autoCompact = this.checked;
