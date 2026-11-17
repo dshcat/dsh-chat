@@ -676,8 +676,8 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 .ctxrow span:last-child{font-variant-numeric:tabular-nums;color:var(--txt)}
 
 .tempval{color:var(--acc2);font-size:13px;margin-left:6px;font-variant-numeric:tabular-nums}
-#csTemp{-webkit-appearance:none;width:100%;height:4px;border-radius:99px;background:var(--line2);outline:none;margin:10px 0 2px}
-#csTemp::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--acc);border:2px solid var(--bg2)}
+#csTemp,#setTemp,#setTopP{-webkit-appearance:none;width:100%;height:4px;border-radius:99px;background:var(--line2);outline:none;margin:10px 0 2px}
+#csTemp::-webkit-slider-thumb,#setTemp::-webkit-slider-thumb,#setTopP::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--acc);border:2px solid var(--bg2)}
 
 /* ---------- 3.2 推理等级滑条 ---------- */
 .effortwrap{

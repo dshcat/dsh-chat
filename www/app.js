@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '4.3.2';
+  var APP_VERSION = '5.0.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -46,7 +46,7 @@
     return {
       settings: {
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
-        system: '', think: true, search: true, effort: 'high', temperature: 1,
+        system: '', think: true, search: true, effort: 'high', temperature: 1, topP: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
         avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false, autoCompact: true, logo: '', compressImage: true
       },
@@ -126,6 +126,7 @@
     if (typeof state.settings.bg.veil !== 'number') state.settings.bg.veil = 0.8;
     if (!state.settings.effort) state.settings.effort = state.settings.think ? 'high' : 'none';
     if (typeof state.settings.temperature !== 'number') state.settings.temperature = 1;
+    if (typeof state.settings.topP !== 'number') state.settings.topP = 1;
     if (!state.settings.usageByDay) state.settings.usageByDay = {};
     if (!state.settings.avatar) state.settings.avatar = { user: '', ai: '' };
     PRESETS.forEach(function (p) {
@@ -829,7 +830,7 @@
 
     var h = '';
     h += '<div class="ai-head">' + avHtml + '<span>' +
-      (ai.streaming ? T('正在生成') : 'DSChat') + '</span></div>';
+      (ai.streaming ? T('正在生成') : 'DSChat ULW') + '</span></div>';
 
     if (ai.thinking) {
       h += '<details class="think"' + (ai._thinkOpen ? ' open' : '') + ' data-act="think" data-turn="' + turn.id + '">' +
@@ -1406,6 +1407,7 @@
     var sysText = effSystem(conv);
     if (sysText && sysText.trim()) body.system = sysText.trim();
     body.temperature = effTemperature(conv);
+    if (typeof state.settings.topP === 'number') body.top_p = state.settings.topP;
 
     var budget = requestBudget(conv);
     if (state.settings.autoCompact !== false && tokensOfMessages(body.messages) > budget * 0.88) {
@@ -1569,6 +1571,15 @@
         : '<span class="ficon">' + (f.uploading ? '<span class="spin2"></span>' : ICON.link) + '</span>';
       d.innerHTML = head + '<span class="nm">' + esc(f.name) + '</span>' +
         '<button class="rm" data-rm="' + i + '">✕</button>';
+      if (f.kind === 'image' && f.data) {
+        d.style.cursor = 'zoom-in';
+        d.addEventListener('click', function (e) {
+          if (e.target.closest('.rm')) return;
+          var imgs = arr.filter(function (x) { return x.kind === 'image' && x.data; })
+            .map(function (x) { return 'data:' + (x.media || 'image/jpeg') + ';base64,' + x.data; });
+          openLightbox('data:' + (f.media || 'image/jpeg') + ';base64,' + f.data, imgs);
+        });
+      }
       row.appendChild(d);
     });
     var btns = row.querySelectorAll('[data-rm]');
@@ -2062,6 +2073,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '5.0.0', d: '2026-11-17', items: ['Renamed to DSChat ULW (Ultra Light Weight)', 'Pending attachments can be previewed with pinch zoom', 'Settings temperature slider now matches the chat settings style', 'New Top P control with explanation'] },
         { v: '4.3.2', d: '2026-11-17', items: ['Fixed compressed images being sent as PNG, which caused "unsupported image" errors', 'Repairs media type of images already in history', 'More English: compress images, app icon, archive banner'] },
         { v: '4.3.1', d: '2026-11-17', items: ['Pinch to zoom (1x–4x) and drag to pan in the image viewer', 'Double-tap to zoom in or reset'] },
         { v: '4.3.0', d: '2026-11-17', items: ['Archived chats can be opened and continued in a dedicated archive mode', 'Archived chats no longer appear in the normal list', 'Rejected images are retried compressed instead of being dropped', 'Streaming render optimised to reduce flicker'] },
@@ -2087,6 +2099,7 @@
       return;
     }
     var logs = [
+      { v: '5.0.0', d: '2026-11-17', items: ['软件更名为 DSChat ULW（Ultra Light Weight）', '待发送的图片可以点开预览，支持双指缩放', '设置里的温度滑条与对话设置统一视觉', '新增 Top P 调节（带说明）'] },
       { v: '4.3.2', d: '2026-11-17', items: ['修复压缩后的图片被当成 png 发送、导致「unsupported image」报错', '自动修正历史消息里图片的格式标记', '补齐英文：压缩图片、应用图标、归档提示等'] },
       { v: '4.3.1', d: '2026-11-17', items: ['看图支持双指缩放（1–4 倍）与单指拖动查看细节', '双击放大 / 还原'] },
       { v: '4.3.0', d: '2026-11-17', items: ['归档对话可直接打开继续聊，进入独立的归档模式并带提示条', '归档对话不再出现在普通列表', '图片被接口拒绝时不再只发纯文本：先压缩重试，保留图片', '优化流式渲染，减少生成时的闪烁'] },
@@ -2756,6 +2769,9 @@
     var gt = typeof s.temperature === 'number' ? s.temperature : 1;
     $('setTemp').value = String(Math.round(gt * 10));
     $('setTempVal').textContent = gt.toFixed(1);
+    var tp = typeof s.topP === 'number' ? s.topP : 1;
+    $('setTopP').value = String(Math.round(tp * 100));
+    $('setTopPVal').textContent = tp.toFixed(2);
     $('aboutVer').textContent = APP_VERSION;
     applyTheme();
     renderPresets();
@@ -3086,6 +3102,11 @@
       state.settings.hideUsage = this.checked;
       save(true);
       applyPrivacy();
+    };
+    $('setTopP').oninput = function () {
+      state.settings.topP = (+this.value) / 100;
+      $('setTopPVal').textContent = state.settings.topP.toFixed(2);
+      save();
     };
     $('setTemp').oninput = function () {
       state.settings.temperature = (+this.value) / 10;

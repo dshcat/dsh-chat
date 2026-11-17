@@ -1,4 +1,4 @@
-# DSChat
+# DSChat ULW
 
 一个给自己用的 Android 版 DeepSeek 客户端：WebView 壳 + 纯静态前端，无后端、无账号、无埋点。
 **非官方项目**，与深度求索（DeepSeek）公司无任何隶属、合作或授权关系。
