@@ -154,13 +154,40 @@
   }
 
   var saveTimer = null;
+
+  function stripImagesFromConv(c) {
+    var changed = false;
+    (c.turns || []).forEach(function (t) {
+      (t.questions || []).forEach(function (q) {
+        (q.files || []).forEach(function (f) {
+          if (f.kind === 'image' && f.data) { f.data = ''; changed = true; }
+        });
+      });
+    });
+    return changed;
+  }
+
   function save(now) {
     function write() {
+      var payload = { settings: state.settings, conversations: state.conversations, activeId: state.activeId };
       try {
-        localStorage.setItem(LS, JSON.stringify({
-          settings: state.settings, conversations: state.conversations, activeId: state.activeId
-        }));
-      } catch (e) { toast('本地空间满了，背景图可能太大'); }
+        localStorage.setItem(LS, JSON.stringify(payload));
+        return;
+      } catch (e) {}
+      // 空间不够：清掉较早对话里的图片数据再试一次
+      var did = false;
+      for (var i = 3; i < state.conversations.length; i++) {
+        if (stripImagesFromConv(state.conversations[i])) did = true;
+      }
+      try {
+        localStorage.setItem(LS, JSON.stringify(payload));
+        if (did) toast('空间不够，已清理较早对话里的图片', 'Cleared images in older chats to free space', 4200);
+      } catch (e2) {
+        if (!state.quotaWarned) {
+          state.quotaWarned = true;
+          toast('本地存储已满，最新的记录可能没存下', 'Local storage is full; recent changes may not be saved', 5000);
+        }
+      }
     }
     clearTimeout(saveTimer);
     if (now) { write(); return; }
@@ -1438,7 +1465,7 @@
     fr.onload = function () {
       var img = new Image();
       img.onload = function () {
-        var max = 1400;
+        var max = 1024;
         var sc = Math.min(1, max / Math.max(img.width, img.height));
         var cv = document.createElement('canvas');
         cv.width = Math.round(img.width * sc);
@@ -1448,7 +1475,7 @@
         ctx.fillRect(0, 0, cv.width, cv.height);
         ctx.drawImage(img, 0, 0, cv.width, cv.height);
         var data;
-        try { data = cv.toDataURL('image/jpeg', 0.8); } catch (e) { cb(null); return; }
+        try { data = cv.toDataURL('image/jpeg', 0.72); } catch (e) { cb(null); return; }
         cb(data.indexOf('base64,') === 0 ? data.slice(7) : data.split(',')[1]);
       };
       img.onerror = function () { cb(null); };
@@ -1892,6 +1919,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.0.1', d: '2026-11-17', items: ['Fixed the repeated "storage full" toast when switching chats: now shown once with an accurate message', 'Image compression lowered from 1400px to 1024px to save local space', 'Changelog now covers every change since 3.10.0'] },
         { v: '4.0.0', d: '2026-11-17', items: ['New illustrated app icon', 'English gaps fixed: New chat, greetings, empty state, usage line', 'First public release'] },
         { v: '3.10.1', d: '2026-11-17', items: ['Toasts stay visible 2.6s, important ones 4.6s', 'Toasts and dialogs show an English sub-line in English mode'] },
         { v: '3.10.0', d: '2026-11-17', items: ['Usage log keeps 30 days, fixed-height scroll area, searchable', 'Old records without breakdown still show total tokens', 'Full English UI, including notices and changelog'] },
@@ -1910,6 +1938,7 @@
       return;
     }
     var logs = [
+      { v: '4.0.1', d: '2026-11-17', items: ['修复切换对话时反复弹出的「本地空间满了」提示：改为只提示一次，并说明准确原因', '图片压缩从 1400px 降到 1024px，减少本地占用', '更新公告补齐 3.10.0 以后的全部改动'] },
       { v: '4.0.0', d: '2026-11-17', items: ['全新封面图标（插画风）', '补齐英文：新对话、问候语、空状态、用量统计行', '作为首个公开版本发布'] },
       { v: '3.10.1', d: '2026-11-17', items: ['提示停留时间延长到 2.6 秒，重要提示 4.6 秒', '英文模式下提示与确认框附带英文小字'] },
       { v: '3.10.0', d: '2026-11-17', items: ['用量只保留 30 天，固定高度区域内滑动与搜索', '旧记录没有拆分时改为显示总 token 数', '英文界面补全，包含用户须知与更新公告'] },
