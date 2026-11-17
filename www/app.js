@@ -119,25 +119,9 @@
     return c;
   }
 
-  function load() {
-    var d = defaults(), raw = null;
-    try { raw = localStorage.getItem(LS); } catch (e) {}
-    if (!raw) {
-      for (var i = 0; i < LS_OLD.length && !raw; i++) {
-        try { raw = localStorage.getItem(LS_OLD[i]); } catch (e) {}
-      }
-    }
-    state.settings = d.settings;
-    state.restartFresh = true;
-    if (!raw) return;
-    try {
-      var o = JSON.parse(raw);
-      state.settings = Object.assign(d.settings, o.settings || {});
-      state.conversations = (o.conversations || []).map(migrate).filter(function (c) {
-        return c.turns && c.turns.length;   // 不要留下 0 条提问的空壳
-      });
-      state.activeId = null;   // 每次启动都是一张新对话
-    } catch (e) {}
+  var LS_SET = 'deepchat.settings.v1';
+
+  function normalizeSettings(d) {
     if (!state.settings.bg) state.settings.bg = { kind: 'none' };
     if (typeof state.settings.bg.veil !== 'number') state.settings.bg.veil = 0.8;
     if (!state.settings.effort) state.settings.effort = state.settings.think ? 'high' : 'none';
@@ -147,51 +131,126 @@
     PRESETS.forEach(function (p) {
       if (state.settings.system === p.text) state.settings.system = '';
     });
-    try { if (!localStorage.getItem(LS)) save(true); } catch (e) {}
-    if (!state.conversations.length) state.activeId = null;
-    if (state.activeId && !findConv(state.activeId)) state.activeId = null;
-    save(true);   // 顺手把被清掉的空对话写回本地
+  }
+
+  function loadSettings() {
+    var d = defaults();
+    state.settings = d.settings;
+    state.restartFresh = true;
+    var raw = null;
+    try { raw = localStorage.getItem(LS_SET); } catch (e) {}
+    if (!raw) {
+      try { raw = localStorage.getItem(LS); } catch (e) {}
+      if (!raw) {
+        for (var i = 0; i < LS_OLD.length && !raw; i++) {
+          try { raw = localStorage.getItem(LS_OLD[i]); } catch (e) {}
+        }
+      }
+    }
+    if (raw) {
+      try {
+        var o = JSON.parse(raw);
+        if (o.settings) state.settings = Object.assign(d.settings, o.settings);
+      } catch (e) {}
+    }
+    normalizeSettings();
+  }
+
+  /* ---- IndexedDB：对话正文（容量远大于 localStorage） ---- */
+  var idbPromise = null;
+  function idbOpen() {
+    if (!window.indexedDB) return Promise.reject(new Error('no idb'));
+    if (!idbPromise) {
+      idbPromise = new Promise(function (resolve, reject) {
+        var req = indexedDB.open('dsc', 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore('kv'); };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error || new Error('idb open failed')); };
+      });
+    }
+    return idbPromise;
+  }
+  function idbGet() {
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction('kv', 'readonly');
+        var req = tx.objectStore('kv').get('data');
+        req.onsuccess = function () { resolve(req.result || null); };
+        req.onerror = function () { reject(req.error); };
+      });
+    });
+  }
+  function idbSet(data) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(data, 'data');
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function cleanConvs(list) {
+    return (list || []).map(migrate).filter(function (c) { return c.turns && c.turns.length; });
+  }
+
+  function loadData() {
+    return idbGet().then(function (rec) {
+      if (rec && Array.isArray(rec.conversations)) {
+        state.conversations = cleanConvs(rec.conversations);
+        return;
+      }
+      // 从旧的 localStorage 迁移一次
+      var raw = null;
+      try { raw = localStorage.getItem(LS); } catch (e) {}
+      if (raw) {
+        try {
+          var o = JSON.parse(raw);
+          state.conversations = cleanConvs(o.conversations);
+        } catch (e) {}
+        try { localStorage.removeItem(LS); } catch (e) {}
+      }
+      return idbSet({ conversations: state.conversations, activeId: null }).catch(function () {});
+    }).catch(function () {
+      // 没有 IndexedDB：退回 localStorage 旧逻辑
+      var raw = null;
+      try { raw = localStorage.getItem(LS); } catch (e) {}
+      if (raw) {
+        try { state.conversations = cleanConvs(JSON.parse(raw).conversations); } catch (e) {}
+      }
+    }).then(function () {
+      state.activeId = null;   // 每次启动都是新对话
+    });
   }
 
   var saveTimer = null;
 
-  function stripImagesFromConv(c) {
-    var changed = false;
-    (c.turns || []).forEach(function (t) {
-      (t.questions || []).forEach(function (q) {
-        (q.files || []).forEach(function (f) {
-          if (f.kind === 'image' && f.data) { f.data = ''; changed = true; }
-        });
-      });
-    });
-    return changed;
-  }
-
-  function save(now) {
-    function write() {
-      var payload = { settings: state.settings, conversations: state.conversations, activeId: state.activeId };
-      try {
-        localStorage.setItem(LS, JSON.stringify(payload));
-        return;
-      } catch (e) {}
-      // 空间不够：清掉较早对话里的图片数据再试一次
+  function flushData() {
+    var payload = { conversations: state.conversations, activeId: state.activeId };
+    idbSet(payload).catch(function () {
+      // 退回 localStorage，并尽量腾空间
       var did = false;
       for (var i = 3; i < state.conversations.length; i++) {
         if (stripImagesFromConv(state.conversations[i])) did = true;
       }
       try {
-        localStorage.setItem(LS, JSON.stringify(payload));
+        localStorage.setItem(LS, JSON.stringify({ settings: state.settings, conversations: state.conversations, activeId: state.activeId }));
         if (did) toast('空间不够，已清理较早对话里的图片', 'Cleared images in older chats to free space', 4200);
-      } catch (e2) {
+      } catch (e) {
         if (!state.quotaWarned) {
           state.quotaWarned = true;
           toast('本地存储已满，最新的记录可能没存下', 'Local storage is full; recent changes may not be saved', 5000);
         }
       }
-    }
+    });
+  }
+
+  function save(now) {
+    try { localStorage.setItem(LS_SET, JSON.stringify(state.settings)); } catch (e) {}
     clearTimeout(saveTimer);
-    if (now) { write(); return; }
-    saveTimer = setTimeout(write, 250);
+    if (now) { flushData(); return; }
+    saveTimer = setTimeout(flushData, 250);
   }
 
   function findConv(id) {
@@ -1919,6 +1978,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.1.0', d: '2026-11-17', items: ['Chat data moved from localStorage to IndexedDB: from 5MB to hundreds of MB', 'Existing data is migrated automatically on first launch', 'Settings stay in localStorage (tiny)'] },
         { v: '4.0.1', d: '2026-11-17', items: ['Fixed the repeated "storage full" toast when switching chats: now shown once with an accurate message', 'Image compression lowered from 1400px to 1024px to save local space', 'Changelog now covers every change since 3.10.0'] },
         { v: '4.0.0', d: '2026-11-17', items: ['New illustrated app icon', 'English gaps fixed: New chat, greetings, empty state, usage line', 'First public release'] },
         { v: '3.10.1', d: '2026-11-17', items: ['Toasts stay visible 2.6s, important ones 4.6s', 'Toasts and dialogs show an English sub-line in English mode'] },
@@ -1938,6 +1998,7 @@
       return;
     }
     var logs = [
+      { v: '4.1.0', d: '2026-11-17', items: ['对话正文从 localStorage 迁到 IndexedDB，容量从 5MB 提升到数百 MB', '首次启动自动迁移旧数据，旧键会被清理', '设置仍留在 localStorage，体积很小'] },
       { v: '4.0.1', d: '2026-11-17', items: ['修复切换对话时反复弹出的「本地空间满了」提示：改为只提示一次，并说明准确原因', '图片压缩从 1400px 降到 1024px，减少本地占用', '更新公告补齐 3.10.0 以后的全部改动'] },
       { v: '4.0.0', d: '2026-11-17', items: ['全新封面图标（插画风）', '补齐英文：新对话、问候语、空状态、用量统计行', '作为首个公开版本发布'] },
       { v: '3.10.1', d: '2026-11-17', items: ['提示停留时间延长到 2.6 秒，重要提示 4.6 秒', '英文模式下提示与确认框附带英文小字'] },
@@ -3238,7 +3299,7 @@
   }
 
   function init() {
-    load();
+    loadSettings();
     try {
       var q = new URLSearchParams(location.search).get('api');
       if (q) state.settings.base = q;
@@ -3256,6 +3317,13 @@
     document.querySelector('.empty h1').textContent =
       T(h < 6 ? '夜深了' : h < 11 ? '早上好' : h < 14 ? '中午好' : h < 19 ? '下午好' : '晚上好');
     $('emptyHint').textContent = state.settings.apiKey ? T('说点什么，或者直接问我。') : T('先到设置里填上 DeepSeek API Key，然后随便聊。');
+
+    // 对话正文在 IndexedDB，异步载入后重绘
+    loadData().then(function () {
+      renderMessages();
+      updateHeader();
+      if (state.conversations.length) save(true);
+    }).catch(function () {});
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
