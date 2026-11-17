@@ -47,7 +47,7 @@
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: PRESETS[0].text, think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
-        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false
+        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false
       },
       conversations: [], activeId: null
     };
@@ -285,7 +285,14 @@
     '近 15 天 —': 'Last 15 days —',
     '费用按官方价格估算，仅供参考；高峰期为两倍。': 'Costs are estimates; peak hours are 2x.',
     '对话设置': 'Chat settings', '上下文用量': 'Context usage',
-    '使用前请读一下': 'Before you start'
+    '使用前请读一下': 'Before you start',
+    '批量': 'Select', '完成': 'Done', '收藏': 'Star', '归档': 'Archive', '取消': 'Cancel',
+    '归档箱': 'Archive', '按钮': 'Button', '点了也不会有什么事情发生': 'Nothing will happen',
+    '更新公告': 'Changelog', '用户须知': 'About this app',
+    '隐藏用量与花费': 'Hide usage and cost',
+    '藏起每条回答的 tokens 和金额，以及每日花费图': 'Hide token counts, cost per reply and the daily chart',
+    '恢复备份': 'Restore backup', '导出备份': 'Export backup'
+
   };
 
   var LANG_NODES = null;
@@ -711,6 +718,7 @@
 
   /* ---------- 问题跳转条 ---------- */
   var qpanelOpen = false, activeTurnIdx = 0, lastTurnId = null;
+  var batchMode = false, selectedIds = {};
 
   function railTurns() {
     var c = activeConv();
@@ -1377,8 +1385,8 @@
     var draw = redraw || renderAttach;
     var arr = [];
     for (var i = 0; i < list.length; i++) arr.push(list[i]);
-    arr.slice(0, 6).forEach(function (file) {
-      if (box.length >= 6) return;
+    arr.slice(0, 20).forEach(function (file) {
+      if (box.length >= 20) return;
       if (/^image\//.test(file.type || '')) {
         var item = { kind: 'image', name: file.name || '图片', media: 'image/jpeg', uploading: true };
         box.push(item);
@@ -1520,7 +1528,7 @@
 
   /* ---------- 抽屉 / 菜单 ---------- */
   function sortedConvs() {
-    return state.conversations.slice().sort(function (a, b) {
+    return state.conversations.filter(function (c) { return !c.archived; }).sort(function (a, b) {
       if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
       return (b.updatedAt || 0) - (a.updatedAt || 0);
     });
@@ -1586,14 +1594,21 @@
     } else {
       sub = '<div class="conv-sub">' + (c.turns ? c.turns.length : 0) + ' 条提问' + (badges ? ' · ' + badges : '') + '</div>';
     }
-    d.innerHTML = '<div class="conv-main"><div class="conv-title">' + esc(c.title || '新对话') + '</div>' + sub + '</div>' +
+    if (batchMode) d.classList.toggle('sel', !!selectedIds[c.id]);
+    d.innerHTML = '<span class="cb">' + (selectedIds[c.id] ? '✓' : '') + '</span>' +
+      '<div class="conv-main"><div class="conv-title">' + esc(c.title || '新对话') + '</div>' + sub + '</div>' +
       '<button class="more" data-act="more" data-cid="' + c.id + '" aria-label="更多">⋯</button>';
     return d;
+  }
+
+  function archivedConvs() {
+    return state.conversations.filter(function (c) { return !!c.archived; });
   }
 
   function renderConvList() {
     var box = $('convlist');
     box.innerHTML = '';
+    document.body.classList.toggle('batching', batchMode);
     var q = convQuery.trim();
 
     if (q) {
@@ -1692,6 +1707,150 @@
     ask('删除对话', '「' + (c.title || '新对话') + '」将被永久删除，问题和回答一起删掉，无法恢复。', '删除', true, function () {
       deleteConv(cid);
     });
+  }
+
+  function setBatch(on) {
+    batchMode = on;
+    selectedIds = {};
+    $('btnBatch').textContent = on ? '完成' : '批量';
+    $('btnBatch').classList.toggle('on', on);
+    $('batchBar').classList.toggle('show', on);
+    updateBatchInfo();
+    renderConvList();
+  }
+
+  function updateBatchInfo() {
+    var n = Object.keys(selectedIds).filter(function (k) { return selectedIds[k]; }).length;
+    $('batchInfo').textContent = '已选 ' + n + ' 项';
+  }
+
+  function toggleSelect(cid) {
+    selectedIds[cid] = !selectedIds[cid];
+    updateBatchInfo();
+    var row = document.querySelector('#convlist .conv[data-cid="' + cid + '"]');
+    if (row) {
+      row.classList.toggle('sel', !!selectedIds[cid]);
+      var cb = row.querySelector('.cb');
+      if (cb) cb.textContent = selectedIds[cid] ? '✓' : '';
+    } else {
+      renderConvList();
+    }
+  }
+
+  function batchAction(kind) {
+    var ids = Object.keys(selectedIds).filter(function (k) { return selectedIds[k]; });
+    if (!ids.length) { toast('先选几条对话'); return; }
+    if (kind === 'cancel') { setBatch(false); return; }
+    if (kind === 'fav') {
+      ids.forEach(function (id) { var c = findConv(id); if (c) c.fav = true; });
+      save(true); renderConvList(); toast('已收藏 ' + ids.length + ' 条');
+      return;
+    }
+    if (kind === 'archive') {
+      ids.forEach(function (id) { var c = findConv(id); if (c) c.archived = true; });
+      if (ids.indexOf(state.activeId) >= 0) state.activeId = null;
+      save(true); renderMessages(); setBatch(false); toast('已归档 ' + ids.length + ' 条');
+      return;
+    }
+    if (kind === 'del') {
+      ask('删除 ' + ids.length + ' 条对话', '这些对话的提问、回答、版本和附件都会被删除，无法恢复。', '删除', true, function () {
+        state.conversations = state.conversations.filter(function (c) { return ids.indexOf(c.id) < 0; });
+        if (ids.indexOf(state.activeId) >= 0) state.activeId = null;
+        save(true); renderMessages(); setBatch(false); toast('已删除');
+      });
+    }
+  }
+
+  function openSheetNamed(name) {
+    if (name === 'changelog') fillChangelog();
+    if (name === 'notice') fillNotice();
+    var el = $(name + 'Sheet');
+    if (el) { el.classList.add('open'); $('scrim').classList.add('show'); }
+  }
+  function closeSheetNamed(name) {
+    var el = $(name + 'Sheet');
+    if (el) el.classList.remove('open');
+    $('scrim').classList.remove('show');
+  }
+
+  function fillChangelog() {
+    var box = $('changelogBody');
+    if (!box || box.innerHTML) return;
+    var logs = [
+      { v: '3.7.0', d: '2026-11-17', items: ['发送前自动压缩上下文，历史超长先丢最早的整轮对话', '单条消息超限自动截断并标注截断字数', '按中文/英文分别估算 token，不再低估'] },
+      { v: '3.6.x', d: '2026-11-17', items: ['编辑提问时可继续添加图片与文件', '长按气泡直接进入编辑', '流式回答不再自动跟随滚动', '长按对话打开操作菜单', '新增隐藏用量开关'] },
+      { v: '3.4–3.5', d: '2026-11-17', items: ['推理等级表盘实验（后改为列表）', '扇形渐变与粒子效果'] },
+      { v: '3.1–3.3', d: '2026-11-17', items: ['上下文圆环与明细', '对话级设置：名称、提示词、温度、头像、背景', '推理等级滑条'] },
+      { v: '2.9–3.0', d: '2026-11-17', items: ['改用鲸鱼封面图标', '正式更名为 DSChat'] },
+      { v: '2.6–2.8', d: '2026-11-17', items: ['首次启动免责声明与官方链接', '左侧问题跳转条', '多图横排、点开全屏、多选上传'] },
+      { v: '2.4–2.5', d: '2026-11-17', items: ['图片与文件输入（Files API）', '15 天花费柱状图', '自定义头像与选图裁剪'] },
+      { v: '2.2–2.3', d: '2026-11-17', items: ['对话置顶、收藏、删除保护', '日期分组与搜索', '每轮用量明细'] },
+      { v: '2.0–2.1', d: '2026-11-17', items: ['浅色/深色主题与自定义背景', '问题与回答两套版本切换', 'MIT 开源'] },
+      { v: '1.0', d: '2026-11-16', items: ['首个可安装版本：流式对话、搜索、提示词、用量统计'] }
+    ];
+    box.innerHTML = '<div class="log">' + logs.map(function (l) {
+      return '<h4>v' + l.v + '<span>' + l.d + '</span></h4><ul>' +
+        l.items.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>';
+    }).join('') + '</div>';
+  }
+
+  function fillNotice() {
+    var box = $('noticeBody');
+    if (!box || box.innerHTML) return;
+    box.innerHTML = '<div class="notice">' +
+      '<p><b>DSChat 是什么</b><br>一个只给自己用的 Android 客户端。它把你在界面上输入的内容，用你自己的 DeepSeek API Key 直接发到 api.deepseek.com，再把回答显示出来。</p>' +
+      '<h4>它不做什么</h4>' +
+      '<p>不托管、不上传你的 Key；没有账号系统；没有中转服务器，开发者看不到你的对话；不收集统计，也没有崩溃上报。</p>' +
+      '<h4>费用</h4>' +
+      '<p>对话由 DeepSeek 模型生成，费用在你自己账户里扣。界面上的金额是按官方价格估算的，仅供参考，高峰期是两倍。建议在 DeepSeek 平台设置每日消费上限。</p>' +
+      '<h4>数据</h4>' +
+      '<p>对话、图片、背景都只存在这台手机的本地存储里，卸载即清空。换手机或重装前，请先在设置里「导出备份」。</p>' +
+      '<h4>性质</h4>' +
+      '<p>本项目与深度求索没有任何隶属、合作或授权关系，不是官方应用。以 MIT 协议免费开源，按现状提供，不附带担保。</p>' +
+      '</div>';
+  }
+
+  function openArchive() {
+    renderArchive();
+    $('archiveSheet').classList.add('open');
+    $('scrim').classList.add('show');
+  }
+  function closeArchive() {
+    $('archiveSheet').classList.remove('open');
+    $('scrim').classList.remove('show');
+  }
+  function renderArchive() {
+    var body = $('archiveBody');
+    var list = archivedConvs();
+    $('archiveCount').textContent = String(list.length);
+    if (!list.length) { body.innerHTML = '<p class="note">还没有归档的对话。</p>'; return; }
+    body.innerHTML = '';
+    list.forEach(function (c) {
+      var d = document.createElement('div');
+      d.className = 'architem';
+      d.innerHTML = '<div class="ai-main"><div class="ai-t">' + esc(c.title || '新对话') + '</div>' +
+        '<div class="ai-s">' + (c.turns ? c.turns.length : 0) + ' 条提问</div></div>' +
+        '<button data-restore="' + c.id + '">恢复</button>' +
+        '<button class="del" data-adel="' + c.id + '">删除</button>';
+      body.appendChild(d);
+    });
+    var rs = body.querySelectorAll('[data-restore]');
+    for (var i = 0; i < rs.length; i++) {
+      rs[i].onclick = function () {
+        var c = findConv(this.getAttribute('data-restore'));
+        if (c) { c.archived = false; save(true); renderArchive(); renderConvList(); toast('已恢复'); }
+      };
+    }
+    var ds = body.querySelectorAll('[data-adel]');
+    for (var j = 0; j < ds.length; j++) {
+      ds[j].onclick = function () {
+        var cid = this.getAttribute('data-adel');
+        ask('删除对话', '归档里的这条对话将被永久删除。', '删除', true, function () {
+          state.conversations = state.conversations.filter(function (x) { return x.id !== cid; });
+          save(true); renderArchive(); renderConvList();
+        });
+      };
+    }
   }
 
   function openConvMenu(cid) {
@@ -2148,6 +2307,8 @@
     $('setThink').checked = !!s.think;
     $('setSearch').checked = !!s.search;
     $('setHideUsage').checked = !!s.hideUsage;
+    $('setDummy').checked = !!s.dummy;
+    $('archiveCount').textContent = String(archivedConvs().length);
     var gt = typeof s.temperature === 'number' ? s.temperature : 1;
     $('setTemp').value = String(Math.round(gt * 10));
     $('setTempVal').textContent = gt.toFixed(1);
@@ -2295,6 +2456,23 @@
       document.querySelector('.drawer-search').classList.remove('has');
       renderConvList();
     };
+    $('btnBatch').onclick = function () { setBatch(!batchMode); };
+    $('batchBar').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-batch]');
+      if (!b) return;
+      batchAction(b.getAttribute('data-batch'));
+    });
+    $('btnArchive').onclick = openArchive;
+    $('btnArchiveClose').onclick = closeArchive;
+    $('setDummy').onchange = function () {
+      state.settings.dummy = this.checked;
+      save(true);
+      haptic();
+    };
+    $('btnChangelog').onclick = function () { openSheetNamed('changelog'); };
+    $('btnChangelogClose').onclick = function () { closeSheetNamed('changelog'); };
+    $('btnNotice').onclick = function () { openSheetNamed('notice'); };
+    $('btnNoticeClose').onclick = function () { closeSheetNamed('notice'); };
     $('btnMenu').onclick = openDrawer;
     $('btnCloseDrawer').onclick = closeDrawer;
     $('scrim').onclick = function () {
@@ -2536,6 +2714,7 @@
       }
       var row = e.target.closest('.conv');
       if (row) {
+        if (batchMode) { toggleSelect(row.dataset.cid); return; }
         state.activeId = row.dataset.cid;
         save(true);
         renderMessages();
@@ -2559,7 +2738,8 @@
           timer = null;
           longPressed = true;
           haptic();
-          askDeleteConv(cid);
+          if (!batchMode) setBatch(true);
+          if (!selectedIds[cid]) toggleSelect(cid);
         }, 460);
       });
       box.addEventListener('pointermove', cancel);

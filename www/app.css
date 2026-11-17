@@ -799,3 +799,59 @@ sup.cite{font-size:.62em;vertical-align:super;color:var(--acc2);margin-left:1px;
 /* 隐藏用量 */
 body.hide-usage .usage{display:none}
 body.hide-usage .usage-sec{display:none}
+
+/* ---------- 3.8 批量管理 / 归档 / 说明 ---------- */
+.dh-actions{display:flex;align-items:center;gap:4px}
+.txtbtn{font-size:12.5px;color:var(--acc2);padding:6px 8px;border-radius:9px}
+.txtbtn:active{background:var(--bg3)}
+.txtbtn.on{background:var(--acc-soft)}
+
+.batchbar{
+  display:none;flex-direction:column;gap:10px;padding:12px 14px calc(env(safe-area-inset-bottom) + 12px);
+  border-top:1px solid var(--line);background:var(--bg2);
+}
+.batchbar.show{display:flex}
+.batchinfo{font-size:12px;color:var(--dim2)}
+.batchacts{display:flex;gap:8px}
+.batchacts button{
+  flex:1;padding:10px 6px;border-radius:11px;font-size:12.5px;color:var(--txt);
+  background:var(--bg3);border:1px solid var(--line);
+}
+.batchacts .danger-t{color:#d9534f;border-color:rgba(217,83,79,.3)}
+
+.conv .cb{
+  width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line2);flex:0 0 auto;
+  display:none;place-items:center;font-size:11px;color:#fff;
+}
+body.batching .conv .cb{display:grid}
+body.batching .conv .more{display:none}
+.conv.sel .cb{background:var(--acc);border-color:var(--acc)}
+.conv.sel{background:var(--acc-soft)}
+body.batching .conv{pointer-events:auto}
+
+.widebtn{
+  display:block;width:100%;margin-top:10px;padding:12px;border-radius:13px;
+  background:var(--bg3);border:1px solid var(--line);color:var(--txt);font-size:13px;text-align:left;
+}
+.widebtn span{float:right;color:var(--dim2)}
+
+.tipbox{
+  margin-top:12px;padding:11px 13px;border-radius:12px;font-size:11.5px;line-height:1.6;
+  background:rgba(224,169,46,.08);border:1px solid rgba(224,169,46,.28);color:var(--txt);
+}
+.tipbox a{color:var(--acc2);text-decoration:none;border-bottom:1px solid var(--acc-soft)}
+
+.architem{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line)}
+.architem .ai-main{flex:1;min-width:0}
+.architem .ai-t{font-size:13.5px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.architem .ai-s{font-size:11px;color:var(--dim2);margin-top:2px}
+.architem button{font-size:12px;color:var(--acc2);padding:6px 8px}
+.architem button.del{color:#d9534f}
+
+.log h4{font-size:14px;margin:18px 0 6px;color:var(--txt)}
+.log h4:first-child{margin-top:6px}
+.log h4 span{font-size:11px;color:var(--dim2);font-weight:400;margin-left:8px}
+.log ul{margin:0;padding-left:18px}
+.log li{font-size:12.5px;color:var(--dim);line-height:1.7;margin-bottom:6px}
+.notice p{font-size:13px;line-height:1.75;color:var(--txt);margin:0 0 12px}
+.notice h4{font-size:13.5px;margin:16px 0 8px}

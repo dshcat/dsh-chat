@@ -81,9 +81,12 @@
 <aside class="drawer" id="drawer">
   <div class="drawer-head">
     <div class="brand">DSChat</div>
-    <button class="iconbtn small" id="btnCloseDrawer" aria-label="关闭">
-      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
+    <div class="dh-actions">
+      <button class="txtbtn" id="btnBatch">批量</button>
+      <button class="iconbtn small" id="btnCloseDrawer" aria-label="关闭">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
   </div>
   <div class="drawer-search">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
@@ -92,6 +95,15 @@
   </div>
   <button class="newchat" id="btnNew2">＋ 新对话</button>
   <div class="convlist" id="convlist"></div>
+  <div class="batchbar" id="batchBar">
+    <div class="batchinfo" id="batchInfo">已选 0 项</div>
+    <div class="batchacts">
+      <button data-batch="fav">收藏</button>
+      <button data-batch="archive">归档</button>
+      <button data-batch="del" class="danger-t">删除</button>
+      <button data-batch="cancel">取消</button>
+    </div>
+  </div>
   <div class="drawer-foot">
     <button class="footbtn" id="btnSettings">设置 · 外观 · 提示词</button>
     <div class="ver" id="drawerVer">v3.64</div>
@@ -117,6 +129,14 @@
         <button data-lang="zh-Hant">繁體中文</button>
         <button data-lang="en">English</button>
       </div>
+    </div>
+
+    <div class="field rowfield">
+      <div>
+        <span class="label">按钮</span>
+        <span class="note">点了也不会有什么事情发生</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="setDummy"><i></i></label>
     </div>
 
     <div class="field rowfield">
@@ -227,6 +247,10 @@
       <div class="chartsel" id="chartSel">点一下柱子，看当天用量</div>
       <div class="note" id="chartNote">近 15 天 —</div>
       <div class="note">费用按官方价格估算，仅供参考；高峰期为两倍。</div>
+      <div class="tipbox">
+        建议去 DeepSeek 平台把「每日消费上限」设好 —— 万一 Key 泄露被别人拿去刷，损失会被卡住，不至于一夜烧光。
+        <a href="https://platform.deepseek.com" target="_blank" rel="noreferrer">去设置消费上限 →</a>
+      </div>
     </div>
     </div>
 
@@ -238,6 +262,7 @@
         <button class="mini" id="btnExport">导出备份</button>
         <button class="mini" id="btnImport">恢复备份</button>
       </div>
+      <button class="widebtn" id="btnArchive">归档箱 <span id="archiveCount">0</span></button>
       <span class="note">备份含全部对话与设置（不含 API Key），存到手机「下载」目录。</span>
     </div>
 
@@ -253,6 +278,10 @@
         <a href="https://platform.deepseek.com" target="_blank" rel="noreferrer">申请 API Key</a>
         <a href="https://api-docs.deepseek.com/zh-cn/" target="_blank" rel="noreferrer">API 文档</a>
         <a href="https://api-docs.deepseek.com/zh-cn/quick_start/pricing/" target="_blank" rel="noreferrer">价格</a>
+      </div>
+      <div class="btnrow">
+        <button class="mini" id="btnChangelog">更新公告</button>
+        <button class="mini" id="btnNotice">用户须知</button>
       </div>
     </div>
 
@@ -389,6 +418,30 @@
       <div class="note" id="csCtxLine">—</div>
     </div>
   </div>
+</section>
+
+<section class="sheet" id="archiveSheet">
+  <div class="grab"></div>
+  <div class="sheet-head"><div class="sheet-title">归档箱</div>
+    <button class="iconbtn small" id="btnArchiveClose" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="archiveBody"></div>
+</section>
+
+<section class="sheet full" id="changelogSheet">
+  <div class="grab"></div>
+  <div class="sheet-head"><div class="sheet-title">更新公告</div>
+    <button class="iconbtn small" id="btnChangelogClose" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="changelogBody"></div>
+</section>
+
+<section class="sheet full" id="noticeSheet">
+  <div class="grab"></div>
+  <div class="sheet-head"><div class="sheet-title">用户须知</div>
+    <button class="iconbtn small" id="btnNoticeClose" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-body" id="noticeBody"></div>
 </section>
 
 <section class="sheet full" id="agreeSheet">
