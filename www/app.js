@@ -46,7 +46,7 @@
     return {
       settings: {
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
-        system: PRESETS[0].text, think: true, search: true, effort: 'high', temperature: 1,
+        system: '', think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
         avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false, autoCompact: true
       },
@@ -144,6 +144,9 @@
     if (typeof state.settings.temperature !== 'number') state.settings.temperature = 1;
     if (!state.settings.usageByDay) state.settings.usageByDay = {};
     if (!state.settings.avatar) state.settings.avatar = { user: '', ai: '' };
+    PRESETS.forEach(function (p) {
+      if (state.settings.system === p.text) state.settings.system = '';
+    });
     try { if (!localStorage.getItem(LS)) save(true); } catch (e) {}
     if (!state.conversations.length) state.activeId = null;
     if (state.activeId && !findConv(state.activeId)) state.activeId = null;
@@ -1163,12 +1166,17 @@
         state.settings.usageByDay = state.settings.usageByDay || {};
         var rec = state.settings.usageByDay[dk];
         if (typeof rec === 'number') rec = { c: rec, t: 0, n: 0 };
-        if (!rec) rec = { c: 0, t: 0, n: 0 };
+        if (!rec) rec = { c: 0, t: 0, n: 0, hit: 0, miss: 0, out: 0, think: 0 };
         rec.c += ai.cost || 0;
         if (ai.usage) {
-          rec.t += (ai.usage.input_tokens || 0) + (ai.usage.cache_read_input_tokens || 0) + (ai.usage.output_tokens || 0);
+          rec.hit = (rec.hit || 0) + (ai.usage.cache_read_input_tokens || 0);
+          rec.miss = (rec.miss || 0) + (ai.usage.input_tokens || 0);
+          rec.out = (rec.out || 0) + (ai.usage.output_tokens || 0);
+          var th = (ai.usage.output_tokens_details && ai.usage.output_tokens_details.thinking_tokens) || 0;
+          rec.think = (rec.think || 0) + th;
+          rec.t = (rec.t || 0) + (ai.usage.input_tokens || 0) + (ai.usage.cache_read_input_tokens || 0) + (ai.usage.output_tokens || 0);
         }
-        rec.n += 1;
+        rec.n = (rec.n || 0) + 1;
         state.settings.usageByDay[dk] = rec;
       }
       ai.streaming = false;
@@ -1787,6 +1795,10 @@
     var box = $('changelogBody');
     if (!box || box.innerHTML) return;
     var logs = [
+      { v: '3.9.0', d: '2026-11-17', items: ['提示词默认留空，不再自动填预设', '开篇去掉三条示例问题', '用量改为可按日期搜索的明细列表（命中/未命中/输出/思考/金额）', '修复部分面板按返回键直接退出 App 的问题'] },
+      { v: '3.8.2', d: '2026-11-17', items: ['单个对话的 ⋯ 菜单支持归档'] },
+      { v: '3.8.1', d: '2026-11-17', items: ['不再产生空对话占位', '批量模式可点遮罩或返回键退出', '新增自动压缩开关'] },
+      { v: '3.8.0', d: '2026-11-17', items: ['批量收藏/归档/删除', '设置里的归档箱', '附件上限提到 20', '更新公告与用户须知', '计费下的消费上限提醒'] },
       { v: '3.7.0', d: '2026-11-17', items: ['发送前自动压缩上下文，历史超长先丢最早的整轮对话', '单条消息超限自动截断并标注截断字数', '按中文/英文分别估算 token，不再低估'] },
       { v: '3.6.x', d: '2026-11-17', items: ['编辑提问时可继续添加图片与文件', '长按气泡直接进入编辑', '流式回答不再自动跟随滚动', '长按对话打开操作菜单', '新增隐藏用量开关'] },
       { v: '3.4–3.5', d: '2026-11-17', items: ['推理等级表盘实验（后改为列表）', '扇形渐变与粒子效果'] },
@@ -2023,6 +2035,46 @@
       i.style.backgroundImage = a.ai ? 'url(' + a.ai + ')' : '';
       i.innerHTML = a.ai ? '' : '<img src="whale.png" alt="" style="width:70%;height:70%;object-fit:contain">';
     }
+  }
+
+  var usageQuery = '';
+
+  function renderUsageList() {
+    var box = $('usageList');
+    if (!box) return;
+    var q = usageQuery.trim().toLowerCase();
+    var days = Object.keys(state.settings.usageByDay || {}).sort().reverse();
+    var rows = [];
+    var total = 0;
+    days.forEach(function (k) {
+      var r = state.settings.usageByDay[k];
+      if (typeof r === 'number') r = { c: r, t: 0, n: 0, hit: 0, miss: 0, out: 0, think: 0 };
+      total += r.c || 0;
+      var dt = new Date(k + 'T00:00:00');
+      var md = (dt.getMonth() + 1) + '/' + dt.getDate();
+      var label = dayLabel(dt.getTime());
+      if (q && k.toLowerCase().indexOf(q) < 0 && md.indexOf(q) < 0 && label.toLowerCase().indexOf(q) < 0) return;
+      rows.push({ k: k, r: r, md: md, label: label });
+    });
+    if (!rows.length) {
+      box.innerHTML = '<div class="uday-empty">' + (q ? '没有匹配的日期' : '还没有用量记录') + '</div>';
+    } else {
+      box.innerHTML = rows.map(function (x) {
+        var r = x.r;
+        return '<div class="uday"><div class="uday-top">' +
+          '<span class="uday-d">' + esc(x.label) + ' · ' + esc(x.md) + '</span>' +
+          '<span class="uday-c">' + money(r.c) + '</span></div>' +
+          '<div class="uday-t">' +
+          '<span class="u"><i class="ud hit"></i>命中 ' + fmtNum(r.hit || 0) + '</span>' +
+          '<span class="u"><i class="ud miss"></i>未命中 ' + fmtNum(r.miss || 0) + '</span>' +
+          '<span class="u"><i class="ud out"></i>输出 ' + fmtNum(r.out || 0) + '</span>' +
+          (r.think ? '<span class="u"><i class="ud think"></i>思考 ' + fmtNum(r.think) + '</span>' : '') +
+          '<span class="u">' + (r.n || 0) + ' 次</span>' +
+          '</div></div>';
+      }).join('');
+    }
+    var note = $('chartNote');
+    if (note) note.textContent = '合计 ' + money(total) + ' · ' + days.length + ' 天有记录';
   }
 
   function renderChart() {
@@ -2335,7 +2387,7 @@
     renderSwatches();
     renderModelCards();
     renderAvatarSettings();
-    renderChart();
+    renderUsageList();
 
     var turns = 0, cost = 0, tok = 0;
     state.conversations.forEach(function (c) {
@@ -2354,6 +2406,7 @@
 
   function renderPresets() {
     var row = $('presetRow');
+    if (!row) return;
     row.innerHTML = '';
     PRESETS.forEach(function (p) {
       var b = document.createElement('button');
@@ -2372,7 +2425,7 @@
 
   function renderSuggests() {
     var box = $('suggests');
-    if (box.childNodes.length) return;
+    if (!box || box.childNodes.length) return;
     ['解释一下 SSE 流式输出是怎么工作的', '帮我把这段话改得像人说的：尊敬的领导…', '搜一下最近 AI 圈值得看的事'].forEach(function (t) {
       var b = document.createElement('button');
       b.className = 'sug';
@@ -2479,6 +2532,11 @@
     });
     $('btnArchive').onclick = openArchive;
     $('btnArchiveClose').onclick = closeArchive;
+    $('usageSearch').oninput = function () {
+      usageQuery = this.value;
+      clearTimeout(window.__uq);
+      window.__uq = setTimeout(renderUsageList, 120);
+    };
     $('setAutoCompact').onchange = function () {
       state.settings.autoCompact = this.checked;
       save(true);
@@ -2967,6 +3025,9 @@
 
     window.__onBack = function () {
       if ($('agreeSheet').classList.contains('open')) { return true; }
+      if ($('archiveSheet').classList.contains('open')) { closeArchive(); return true; }
+      if ($('changelogSheet').classList.contains('open')) { closeSheetNamed('changelog'); return true; }
+      if ($('noticeSheet').classList.contains('open')) { closeSheetNamed('notice'); return true; }
       if ($('lightbox').classList.contains('show')) { closeLightbox(); return true; }
       if ($('ctxSheet').classList.contains('open')) { closeCtx(); return true; }
       if ($('convSetSheet').classList.contains('open')) { closeConvSet(); return true; }
