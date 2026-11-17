@@ -867,3 +867,4 @@ body.batching .conv{pointer-events:auto}
 .uday-t .u{display:inline-flex;align-items:center;gap:4px}
 .uday-t .ud{width:6px;height:6px;border-radius:2px;display:inline-block}
 .uday-empty{color:var(--dim2);font-size:12px;text-align:center;padding:24px 0}
+.usagelist{height:38vh}

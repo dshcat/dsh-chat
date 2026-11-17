@@ -191,8 +191,8 @@
     var now = new Date();
     var k = dayKey(ts), nk = dayKey(now.getTime());
     var y = new Date(now.getTime() - 86400000);
-    if (k === nk) return '今天';
-    if (k === dayKey(y.getTime())) return '昨天';
+    if (k === nk) return T('今天');
+    if (k === dayKey(y.getTime())) return T('昨天');
     if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + '月' + d.getDate() + '日';
     return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
   }
@@ -297,10 +297,50 @@
     '归档箱': 'Archive', '按钮': 'Button', '点了也不会有什么事情发生': 'Nothing will happen',
     '更新公告': 'Changelog', '用户须知': 'About this app',
     '隐藏用量与花费': 'Hide usage and cost',
-    '藏起每条回答的 tokens 和金额，以及每日花费图': 'Hide token counts, cost per reply and the daily chart',
-    '恢复备份': 'Restore backup', '导出备份': 'Export backup'
+    '藏起每条回答的 tokens 和金额，以及每日花费图': 'Hide tokens, cost per reply and the daily chart',
+    '恢复备份': 'Restore backup', '导出备份': 'Export backup',
+    '导出备份': 'Export backup', '清空所有对话': 'Clear all chats', '清空用量记录': 'Clear usage log',
+    '归档箱': 'Archive', '默认深度思考': 'Thinking by default', '默认联网': 'Search by default',
+    '默认温度': 'Default temperature', '本对话的系统提示词': "This chat's system prompt",
+    '提示词': 'Prompt', '温度': 'Temperature', '上下文': 'Context', '对话名称': 'Chat name',
+    '只存在这台手机里，不会上传，也不经过任何中转服务器。': 'Stored only on this phone. Never uploaded, never proxied.',
+    '还没有 Key？去 platform.deepseek.com 申请和充值 →': 'No key yet? Get one at platform.deepseek.com →',
+    '数值越大背景越淡、字越清楚；拉小看得到图。图片压缩后只存本机。': 'Higher = more transparent. Images are compressed and kept locally.',
+    '点圆框换头像，会先让你选裁剪区域。': 'Tap a circle to change the avatar; you can crop first.',
+    '图片压缩后只存在本机；换成纯色更省心。': 'Images stay on this device. Solid colors are simpler.',
+    '按次额外计费': 'Charged per search', '开：边想边答；关：快、省': 'On: thinks first. Off: fast and cheap',
+    '思考模式下温度不生效；每个对话还可以单独覆盖。': 'Temperature is ignored in thinking mode. Each chat can override it.',
+    '每轮作为 system 发送；留空则不带任何预设。内容保持稳定能命中缓存，便宜 50 倍。': 'Sent as system every turn. Empty means no prompt. A stable prompt hits the cache and costs 50x less.',
+    '只存在这台手机里，不会上传。': 'Stored only on this phone.',
+    '备份含全部对话与设置（不含 API Key），存到手机「下载」目录。': 'Backup includes all chats and settings (no API key), saved to Downloads.',
+    '非官方第三方客户端，与深度求索公司无隶属关系。对话由 DeepSeek API 生成，请遵守其服务条款；API 费用由 Key 持有人自行承担。': 'Unofficial third-party client, not affiliated with DeepSeek. Replies come from the DeepSeek API; follow their terms. API costs are borne by the key holder.',
+    '第三方客户端': 'Third-party client', '不托管 · 仅存本机': 'Not hosted · local only',
+    '不中转 · 直连官方': 'No proxy · direct', 'MIT · 免费开源': 'MIT · free and open source',
+    '建议去 DeepSeek 平台把「每日消费上限」设好 —— 万一 Key 泄露被别人拿去刷，损失会被卡住，不至于一夜烧光。': 'Set a daily spending limit on the DeepSeek platform. If your key leaks, losses are capped instead of burning overnight.',
+    '去设置消费上限 →': 'Set spending limit →',
+    '自动压缩上下文': 'Auto-compress context',
+    '超长时自动省略最早的对话；关掉则原样发送，可能被接口拒绝': 'Drop oldest turns when too long. Off sends as-is and may be rejected.',
+    '点了也不会有什么事情发生': 'Nothing will happen',
+    '显示': 'Show', '隐藏': 'Hide', '透明度': 'Opacity', '恢复默认': 'Reset',
+    '正在生成': 'Generating', '已深度思考': 'Thought', '深度思考中…': 'Thinking…',
+    '来源': 'Sources', '复制': 'Copy', '重新生成': 'Regenerate', '重试': 'Retry',
+    '命中': 'Hit', '未命中': 'Miss', '输出': 'Output', '思考': 'Thinking', '次': 'runs',
+    '合计': 'Total', '旧记录无拆分': 'no breakdown for old records',
+    '今天': 'Today', '昨天': 'Yesterday',
+    '还没有用量记录': 'No usage yet', '没有匹配的日期': 'No matching date',
+    '编辑这条提问': 'Edit this question', '取消': 'Cancel', '保存并生成': 'Save & regenerate',
+    '推理等级': 'Reasoning level', '对话设置': 'Chat settings', '上下文用量': 'Context usage',
+    '归档箱': 'Archive', '更新公告': 'Changelog', '用户须知': 'About',
+    '批量': 'Select', '完成': 'Done', '收藏': 'Star', '归档': 'Archive', '删除': 'Delete'
 
   };
+
+  function T(str) {
+    var lang = state.settings.lang || 'zh-Hans';
+    if (lang === 'en') return EN[str] || str;
+    if (lang === 'zh-Hant') return toHant(str);
+    return str;
+  }
 
   var LANG_NODES = null;
   function langRoots() {
@@ -324,6 +364,23 @@
       if (!ph[i]._ph) ph[i]._ph = ph[i].getAttribute('placeholder');
     }
   }
+  function translateTree(root) {
+    var lang = state.settings.lang || 'zh-Hans';
+    if (lang === 'zh-Hans' || !root) return;
+    (function walk(n) {
+      if (n.nodeType === 3) {
+        var raw = n.nodeValue, key = raw.trim();
+        if (!key) return;
+        var val = lang === 'en' ? EN[key] : toHant(key);
+        if (val && val !== key) n.nodeValue = raw.replace(key, val);
+        return;
+      }
+      if (n.nodeType !== 1) return;
+      if (n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return;
+      for (var i = 0; i < n.childNodes.length; i++) walk(n.childNodes[i]);
+    })(root);
+  }
+
   function applyLang() {
     captureLangNodes();
     var lang = state.settings.lang || 'zh-Hans';
@@ -360,6 +417,7 @@
       }
     }
     syncEffortUI();
+    translateTree($('messages'));
   }
 
   function convOv(conv) { return (conv && conv.overrides) || {}; }
@@ -623,11 +681,11 @@
 
     var h = '';
     h += '<div class="ai-head">' + avHtml + '<span>' +
-      (ai.streaming ? '正在生成' : 'DSChat') + '</span></div>';
+      (ai.streaming ? T('正在生成') : 'DSChat') + '</span></div>';
 
     if (ai.thinking) {
       h += '<details class="think"' + (ai._thinkOpen ? ' open' : '') + ' data-act="think" data-turn="' + turn.id + '">' +
-        '<summary><span class="chev">▶</span>' + (ai.streaming && !ai.text ? '深度思考中…' : '已深度思考') +
+        '<summary><span class="chev">▶</span>' + (ai.streaming && !ai.text ? T('深度思考中…') : T('已深度思考')) +
         '<span class="dim">· ' + ai.thinking.length + ' 字</span></summary>' +
         '<div class="thinkbody">' + esc(ai.thinking) + '</div></details>';
     }
@@ -681,9 +739,9 @@
       h += '<div class="usage">' + usageHtml + '</div>';
       h += '<div class="footbar">';
       h += '<span class="fact">' +
-        '<button data-act="copy" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
+        '<button data-act="copy" data-turn="' + turn.id + '">' + ICON.copy + T('复制') + '</button>' +
         (turn.id === lastTurnId
-          ? '<button data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + '重新生成</button>'
+          ? '<button data-act="regen" data-turn="' + turn.id + '">' + ICON.retry + T('重新生成') + '</button>'
           : '') +
         '</span>';
       h += answerVersHtml(turn);
@@ -714,7 +772,7 @@
       '<span class="utime">' + hhmm(q ? q.ts : Date.now()) + '</span>' +
       questionVersHtml(turn) +
       '<button data-act="edit" data-turn="' + turn.id + '">' + ICON.edit + '编辑</button>' +
-      '<button data-act="copyu" data-turn="' + turn.id + '">' + ICON.copy + '复制</button>' +
+      '<button data-act="copyu" data-turn="' + turn.id + '">' + ICON.copy + T('复制') + '</button>' +
       '</div></div>' +
       '<div class="uavatar"' + (uav ? ' style="background-image:url(' + uav + ')"' : '') + '>' +
       (uav ? '' : AV_USER) + '</div>' +
@@ -828,6 +886,7 @@
     updateRail();
     applyBg();
     updateHeader();
+    translateTree($('messages'));
   }
 
   function allTurns(conv) {
@@ -1794,7 +1853,25 @@
   function fillChangelog() {
     var box = $('changelogBody');
     if (!box || box.innerHTML) return;
+    if ((state.settings.lang || 'zh-Hans') === 'en') {
+      var en = [
+        { v: '3.10.0', d: '2026-11-17', items: ['Usage log keeps 30 days, fixed-height scroll area, searchable', 'Old records without breakdown still show total tokens', 'Full English UI, including notices and changelog'] },
+        { v: '3.9.0', d: '2026-11-17', items: ['System prompt is empty by default', 'Removed starter suggestion cards', 'Usage replaced by a searchable daily ledger', 'Back button no longer exits the app from a sheet'] },
+        { v: '3.8.x', d: '2026-11-17', items: ['Batch star / archive / delete', 'Archive box in settings', 'Attachment limit raised to 20', 'Changelog and user notice', 'Daily spending limit tip'] },
+        { v: '3.7.0', d: '2026-11-17', items: ['Auto-compress context before sending', 'Truncate oversized single messages', 'CJK-aware token estimation'] },
+        { v: '3.1–3.6', d: '2026-11-17', items: ['Context ring and details', 'Per-chat name, prompt, temperature, avatar, wallpaper', 'Editable message with attachments', 'Long-press to edit, no auto-scroll while streaming'] },
+        { v: '2.6–3.0', d: '2026-11-17', items: ['First-run disclaimer', 'Question jump rail', 'Multi-image gallery', 'Renamed to DSChat with whale icon'] },
+        { v: '2.0–2.5', d: '2026-11-17', items: ['Light/dark themes and custom background', 'Question and answer version switching', 'File and image input', 'MIT open source'] },
+        { v: '1.0', d: '2026-11-16', items: ['First installable build: streaming chat, search, prompts, usage stats'] }
+      ];
+      box.innerHTML = '<div class="log">' + en.map(function (l) {
+        return '<h4>v' + l.v + '<span>' + l.d + '</span></h4><ul>' +
+          l.items.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>';
+      }).join('') + '</div>';
+      return;
+    }
     var logs = [
+      { v: '3.10.0', d: '2026-11-17', items: ['用量只保留 30 天，固定高度区域内滑动与搜索', '旧记录没有拆分时改为显示总 token 数', '英文界面补全，包含用户须知与更新公告'] },
       { v: '3.9.0', d: '2026-11-17', items: ['提示词默认留空，不再自动填预设', '开篇去掉三条示例问题', '用量改为可按日期搜索的明细列表（命中/未命中/输出/思考/金额）', '修复部分面板按返回键直接退出 App 的问题'] },
       { v: '3.8.2', d: '2026-11-17', items: ['单个对话的 ⋯ 菜单支持归档'] },
       { v: '3.8.1', d: '2026-11-17', items: ['不再产生空对话占位', '批量模式可点遮罩或返回键退出', '新增自动压缩开关'] },
@@ -1819,6 +1896,20 @@
   function fillNotice() {
     var box = $('noticeBody');
     if (!box || box.innerHTML) return;
+    if ((state.settings.lang || 'zh-Hans') === 'en') {
+      box.innerHTML = '<div class="notice">' +
+        '<p><b>What DSChat is</b><br>An Android client for personal use. It sends what you type, with your own DeepSeek API key, straight to api.deepseek.com and shows the reply.</p>' +
+        '<h4>What it does not do</h4>' +
+        '<p>No key hosting, no uploads, no account system, no proxy server. The developer cannot see your chats. No analytics, no crash reporting.</p>' +
+        '<h4>Cost</h4>' +
+        '<p>Replies are generated by DeepSeek models and billed to your own account. Amounts shown are estimates based on official pricing; peak hours cost double. Set a daily spending limit on the DeepSeek platform.</p>' +
+        '<h4>Data</h4>' +
+        '<p>Chats, images and wallpapers live only in this phone\'s local storage and are erased when you uninstall. Export a backup before switching phones.</p>' +
+        '<h4>Nature</h4>' +
+        '<p>This project is not affiliated with, endorsed by, or authorized by DeepSeek. It is free and open source under MIT, provided as is, without warranty.</p>' +
+        '</div>';
+      return;
+    }
     box.innerHTML = '<div class="notice">' +
       '<p><b>DSChat 是什么</b><br>一个只给自己用的 Android 客户端。它把你在界面上输入的内容，用你自己的 DeepSeek API Key 直接发到 api.deepseek.com，再把回答显示出来。</p>' +
       '<h4>它不做什么</h4>' +
@@ -2043,7 +2134,11 @@
     var box = $('usageList');
     if (!box) return;
     var q = usageQuery.trim().toLowerCase();
-    var days = Object.keys(state.settings.usageByDay || {}).sort().reverse();
+    var cutoff = Date.now() - 30 * 86400000;
+    var days = Object.keys(state.settings.usageByDay || {}).filter(function (k) {
+      var t = new Date(k + 'T00:00:00').getTime();
+      return isFinite(t) && t >= cutoff;      // 只保留最近 30 天
+    }).sort().reverse();
     var rows = [];
     var total = 0;
     days.forEach(function (k) {
@@ -2065,16 +2160,20 @@
           '<span class="uday-d">' + esc(x.label) + ' · ' + esc(x.md) + '</span>' +
           '<span class="uday-c">' + money(r.c) + '</span></div>' +
           '<div class="uday-t">' +
-          '<span class="u"><i class="ud hit"></i>命中 ' + fmtNum(r.hit || 0) + '</span>' +
-          '<span class="u"><i class="ud miss"></i>未命中 ' + fmtNum(r.miss || 0) + '</span>' +
-          '<span class="u"><i class="ud out"></i>输出 ' + fmtNum(r.out || 0) + '</span>' +
-          (r.think ? '<span class="u"><i class="ud think"></i>思考 ' + fmtNum(r.think) + '</span>' : '') +
-          '<span class="u">' + (r.n || 0) + ' 次</span>' +
+          (r.hit == null && r.miss == null && r.out == null
+            ? '<span class="u">合计 ' + fmtNum(r.t || 0) + ' tokens（旧记录无拆分）</span>'
+            : '<span class="u"><i class="ud hit"></i>' + T('命中') + ' ' + fmtNum(r.hit || 0) + '</span>' +
+              '<span class="u"><i class="ud miss"></i>' + T('未命中') + ' ' + fmtNum(r.miss || 0) + '</span>' +
+              '<span class="u"><i class="ud out"></i>' + T('输出') + ' ' + fmtNum(r.out || 0) + '</span>' +
+              (r.think ? '<span class="u"><i class="ud think"></i>' + T('思考') + ' ' + fmtNum(r.think) + '</span>' : '')) +
+          '<span class="u">' + (r.n || 0) + ' ' + T('次') + '</span>' +
           '</div></div>';
       }).join('');
     }
     var note = $('chartNote');
-    if (note) note.textContent = '合计 ' + money(total) + ' · ' + days.length + ' 天有记录';
+    if (note) note.textContent = (state.settings.lang === 'en' ? 'Total ' : '合计 ') + money(total) +
+      ' · ' + days.length + (state.settings.lang === 'en' ? ' days' : ' 天有记录');
+    translateTree($('usageList'));
   }
 
   function renderChart() {
@@ -2388,6 +2487,7 @@
     renderModelCards();
     renderAvatarSettings();
     renderUsageList();
+    translateTree($('sheet'));
 
     var turns = 0, cost = 0, tok = 0;
     state.conversations.forEach(function (c) {
@@ -2532,6 +2632,14 @@
     });
     $('btnArchive').onclick = openArchive;
     $('btnArchiveClose').onclick = closeArchive;
+    $('btnUsageClear').onclick = function () {
+      ask('清空用量记录', '只删除统计记录，不影响任何对话。', '清空', true, function () {
+        state.settings.usageByDay = {};
+        save(true);
+        renderUsageList();
+        toast('已清空用量记录');
+      });
+    };
     $('usageSearch').oninput = function () {
       usageQuery = this.value;
       clearTimeout(window.__uq);
@@ -2837,7 +2945,11 @@
       if (!b) return;
       state.settings.lang = b.getAttribute('data-lang');
       save(true);
+      $('changelogBody').innerHTML = '';
+      $('noticeBody').innerHTML = '';
       applyLang();
+      renderMessages();
+      if ($('sheet').classList.contains('open')) fillSheet();
       haptic();
     });
 
