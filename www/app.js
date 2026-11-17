@@ -211,10 +211,24 @@
     return (list || []).map(migrate).map(fixImageMedia).filter(function (c) { return c.turns && c.turns.length; });
   }
 
+  function clearLegacyKeys() {
+    try { localStorage.removeItem(LS); } catch (e) {}
+    LS_OLD.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+  }
+
   function loadData() {
     return idbGet().then(function (rec) {
       if (rec && Array.isArray(rec.conversations)) {
         state.conversations = cleanConvs(rec.conversations);
+        // 如果设置没存进 localStorage（之前空间不够），从索引库恢复
+        var hasLs = false;
+        try { hasLs = !!localStorage.getItem(LS_SET); } catch (e) {}
+        if (!hasLs && rec.settings) {
+          state.settings = Object.assign(defaults().settings, rec.settings);
+          normalizeSettings();
+          state.settingsRestored = true;
+        }
+        clearLegacyKeys();
         return;
       }
       // 从旧的 localStorage 迁移一次
@@ -225,8 +239,8 @@
           var o = JSON.parse(raw);
           state.conversations = cleanConvs(o.conversations);
         } catch (e) {}
-        try { localStorage.removeItem(LS); } catch (e) {}
       }
+      clearLegacyKeys();
       return idbSet({ conversations: state.conversations, activeId: null }).catch(function () {});
     }).catch(function () {
       // 没有 IndexedDB：退回 localStorage 旧逻辑
@@ -243,7 +257,7 @@
   var saveTimer = null;
 
   function flushData() {
-    var payload = { conversations: state.conversations, activeId: state.activeId };
+    var payload = { conversations: state.conversations, activeId: state.activeId, settings: state.settings };
     idbSet(payload).catch(function () {
       // 退回 localStorage，并尽量腾空间
       var did = false;
@@ -263,7 +277,9 @@
   }
 
   function save(now) {
-    try { localStorage.setItem(LS_SET, JSON.stringify(state.settings)); } catch (e) {}
+    try { localStorage.setItem(LS_SET, JSON.stringify(state.settings)); } catch (e) {
+      state.settingsDirty = true;
+    }
     clearTimeout(saveTimer);
     if (now) { flushData(); return; }
     saveTimer = setTimeout(flushData, 250);
@@ -2073,7 +2089,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
-        { v: '5.0.0', d: '2026-11-17', items: ['Renamed to DSChat ULW (Ultra Light Weight)', 'Pending attachments can be previewed with pinch zoom', 'Settings temperature slider now matches the chat settings style', 'New Top P control with explanation'] },
+        { v: '5.0.0', d: '2026-11-17', items: ['Renamed to DSChat ULW (Ultra Light Weight)', 'Pending attachments can be previewed with pinch zoom', 'Settings temperature slider now matches the chat settings style', 'New Top P control with explanation', 'Fixed settings (API key, prompt, avatar, wallpaper) resetting after a full restart'] },
         { v: '4.3.2', d: '2026-11-17', items: ['Fixed compressed images being sent as PNG, which caused "unsupported image" errors', 'Repairs media type of images already in history', 'More English: compress images, app icon, archive banner'] },
         { v: '4.3.1', d: '2026-11-17', items: ['Pinch to zoom (1x–4x) and drag to pan in the image viewer', 'Double-tap to zoom in or reset'] },
         { v: '4.3.0', d: '2026-11-17', items: ['Archived chats can be opened and continued in a dedicated archive mode', 'Archived chats no longer appear in the normal list', 'Rejected images are retried compressed instead of being dropped', 'Streaming render optimised to reduce flicker'] },
@@ -2099,7 +2115,7 @@
       return;
     }
     var logs = [
-      { v: '5.0.0', d: '2026-11-17', items: ['软件更名为 DSChat ULW（Ultra Light Weight）', '待发送的图片可以点开预览，支持双指缩放', '设置里的温度滑条与对话设置统一视觉', '新增 Top P 调节（带说明）'] },
+      { v: '5.0.0', d: '2026-11-17', items: ['软件更名为 DSChat ULW（Ultra Light Weight）', '待发送的图片可以点开预览，支持双指缩放', '设置里的温度滑条与对话设置统一视觉', '新增 Top P 调节（带说明）', '修复大退后 Key、提示词、头像、背景被重置的问题（旧本地存储占满导致设置写不进去）'] },
       { v: '4.3.2', d: '2026-11-17', items: ['修复压缩后的图片被当成 png 发送、导致「unsupported image」报错', '自动修正历史消息里图片的格式标记', '补齐英文：压缩图片、应用图标、归档提示等'] },
       { v: '4.3.1', d: '2026-11-17', items: ['看图支持双指缩放（1–4 倍）与单指拖动查看细节', '双击放大 / 还原'] },
       { v: '4.3.0', d: '2026-11-17', items: ['归档对话可直接打开继续聊，进入独立的归档模式并带提示条', '归档对话不再出现在普通列表', '图片被接口拒绝时不再只发纯文本：先压缩重试，保留图片', '优化流式渲染，减少生成时的闪烁'] },
@@ -3602,7 +3618,6 @@
     renderAppLogo();
     renderMessages();
     updateHeader();
-    if (!state.settings.agreed) showAgree();
     $('drawerVer').textContent = 'v' + APP_VERSION;
     var h = new Date().getHours();
     document.querySelector('.empty h1').textContent =
@@ -3611,9 +3626,19 @@
 
     // 对话正文在 IndexedDB，异步载入后重绘
     loadData().then(function () {
+      if (state.settingsRestored) {
+        applyTheme();
+        applyPrivacy();
+        applyLang();
+        renderAppLogo();
+        fillSheet();
+        $('emptyHint').textContent = state.settings.apiKey ? T('说点什么，或者直接问我。') : T('先到设置里填上 DeepSeek API Key，然后随便聊。');
+
+      }
       renderMessages();
       updateHeader();
-      if (state.conversations.length) save(true);
+      if (!state.settings.agreed) showAgree();
+      save(true);
     }).catch(function () {});
   }
 
