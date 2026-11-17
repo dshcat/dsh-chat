@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '4.2.1';
+  var APP_VERSION = '4.3.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -1283,6 +1283,38 @@
     return Math.min(lim, REQUEST_BUDGET);
   }
 
+  function shrinkImagesInMessages(msgs) {
+    var jobs = [];
+    (msgs || []).forEach(function (m) {
+      (m.content || []).forEach(function (blk) {
+        if (!blk || blk.type !== 'image' || !blk.source || blk.source.type !== 'base64') return;
+        jobs.push(new Promise(function (resolve) {
+          var img = new Image();
+          img.onload = function () {
+            var max = 720;
+            var sc = Math.min(1, max / Math.max(img.width, img.height));
+            var cv = document.createElement('canvas');
+            cv.width = Math.round(img.width * sc);
+            cv.height = Math.round(img.height * sc);
+            var ctx = cv.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, cv.width, cv.height);
+            ctx.drawImage(img, 0, 0, cv.width, cv.height);
+            try {
+              var d = cv.toDataURL('image/jpeg', 0.6).split(',')[1];
+              blk.source.data = d;
+              blk.source.media_type = 'image/jpeg';
+            } catch (e) {}
+            resolve();
+          };
+          img.onerror = function () { resolve(); };
+          img.src = 'data:' + (blk.source.media_type || 'image/jpeg') + ';base64,' + blk.source.data;
+        }));
+      });
+    });
+    return Promise.all(jobs);
+  }
+
   function trimMessages(msgs, limit) {
     var guard = 0;
     while (msgs.length > 2 && tokensOfMessages(msgs) > limit * 0.88 && guard++ < 300) {
@@ -1305,14 +1337,33 @@
 
     var node = document.querySelector('[data-ai="' + turn.id + '"]');
 
+    var paintSig = '';
+    function liveSig() {
+      var ai = curA(turn) || {};
+      return [ai.thinking ? 1 : 0, (ai.tools || []).length, ai.error ? 1 : 0,
+        (ai.blocks || []).length, ai.streaming ? 1 : 0].join('|');
+    }
     function paint() {
       if (!node) return;
-      if (state.thinkHold) return;   // 用户正在拖动思考内容时不重绘
-      var prev = node.querySelector('.thinkbody');
-      var st = prev ? prev.scrollTop : 0;
-      node.innerHTML = '<div class="body">' + aiInner(turn) + '</div>';
-      var now = node.querySelector('.thinkbody');
-      if (now && st) now.scrollTop = st;
+      if (state.thinkHold) return;              // 正在拖动思考内容时不重绘
+      var sig = liveSig();
+      if (sig !== paintSig) {                    // 结构变化才整块重建
+        paintSig = sig;
+        node.innerHTML = '<div class="body">' + aiInner(turn) + '</div>';
+        return;
+      }
+      var ai = curA(turn);
+      if (!ai) return;
+      var tb = node.querySelector('.thinkbody');
+      if (tb && ai.thinking) tb.textContent = ai.thinking;
+      var html = '';
+      (ai.blocks || []).forEach(function (b) {
+        if (b.type === 'text' && b.text) html += renderMd(b.text, b.citations, ai.srcIndex);
+      });
+      if (!html && ai.text) html = renderMd(ai.text, null, ai.srcIndex);
+      var md = node.querySelector('.md');
+      if (md) md.innerHTML = html + '<span class="caret"></span>';
+      else if (html) { paintSig = ''; node.innerHTML = '<div class="body">' + aiInner(turn) + '</div>'; }
     }
     var raf = 0;
     function paintSoon() {
@@ -1402,32 +1453,12 @@
             delete b.output_config;
             return sendOnce(b, false);
           }
-          // 图片被拒时退回纯文本重发一次，至少别让整条消息丢掉
-          if (allowRetry && (res.status === 400 || res.status === 413) &&
-              JSON.stringify(b.messages).indexOf('"image"') >= 0) {
-            b.messages = b.messages.map(function (m) {
-              if (!Array.isArray(m.content)) return m;
-              var kept = m.content.filter(function (c) { return c && c.type !== 'image'; });
-              if (!kept.length) kept = [{ type: 'text', text: '（图片未能发送）' }];
-              return { role: m.role, content: kept };
-            });
-            toast('图片没被接受，已按纯文本重发');
-            return sendOnce(b, false);
-          }
-          var m = String(txt).match(/exceeds max (\d+) tokens/i);
-          if (m && parseInt(m[1], 10) > 1000) {
-            var lim = parseInt(m[1], 10);
-            conv.ctxLimit = lim;
-            save(true);
-            updateCtxRing();
-            if (allowRetry && b.messages && b.messages.length > 2) {
-              b.messages = trimMessages(b.messages, lim);
-              toast('超出 ' + lim.toLocaleString() + ' 上限，已省略最早的对话重试');
+          // 图片太大：压小后重试一次，不丢图
+          if (allowRetry && res.status === 413 && JSON.stringify(b.messages).indexOf('"image"') >= 0) {
+            toast('图片太大，压缩后重发', 'Images too large, retrying compressed', 4000);
+            return shrinkImagesInMessages(b.messages).then(function () {
               return sendOnce(b, false);
-            }
-            var got = String(txt).match(/(\d+) tokens exceeds/i);
-            throw new Error('输入太长：' + (got ? '约 ' + got[1] + ' tokens，' : '') +
-              '模型上限是 ' + lim.toLocaleString() + ' tokens。请把内容分几段发，或去掉附件/长文本。');
+            });
           }
           throw new Error('HTTP ' + res.status + ' · ' + String(msg).slice(0, 200));
         });
@@ -1465,7 +1496,7 @@
       } else {
         var msg = (err && err.message) || '请求失败';
         if (/image|media|content/i.test(msg) && JSON.stringify(body.messages).indexOf('"image"') >= 0) {
-          msg += '　（图片可能不被当前模型接受，试试切成 deepseek-flash、或减少图片）';
+          msg += '　（图片可能不被接受：换 deepseek-flash、减少数量，或开启图片压缩）';
         }
         ai.error = msg;
       }
@@ -1882,6 +1913,12 @@
     var si = $('convSearch');
     if (si) { si.value = ''; document.querySelector('.drawer-search').classList.remove('has'); }
     renderConvList(); $('drawer').classList.add('open'); $('scrim').classList.add('show'); }
+  function setActiveConv(id) {
+    state.archiveMode = false;
+    $('archiveBar').classList.remove('show');
+    state.activeId = id;
+  }
+
   function closeDrawer() {
     if (batchMode) setBatch(false);
     $('drawer').classList.remove('open');
@@ -1999,6 +2036,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.3.0', d: '2026-11-17', items: ['Archived chats can be opened and continued in a dedicated archive mode', 'Archived chats no longer appear in the normal list', 'Rejected images are retried compressed instead of being dropped', 'Streaming render optimised to reduce flicker'] },
         { v: '4.2.1', d: '2026-11-17', items: ['New "Compress images" switch: turn off to send originals', 'Images now keep their real format (png/webp no longer sent as jpeg)'] },
         { v: '4.2.0', d: '2026-11-17', items: ['Thinking output can be scrolled while streaming', 'New App icon setting: use any image for the start screen and default AI avatar', 'Version number in About now always reflects the build'] },
         { v: '4.1.0', d: '2026-11-17', items: ['Chat data moved from localStorage to IndexedDB: from 5MB to hundreds of MB', 'Existing data is migrated automatically on first launch', 'Settings stay in localStorage (tiny)'] },
@@ -2021,6 +2059,7 @@
       return;
     }
     var logs = [
+      { v: '4.3.0', d: '2026-11-17', items: ['归档对话可直接打开继续聊，进入独立的归档模式并带提示条', '归档对话不再出现在普通列表', '图片被接口拒绝时不再只发纯文本：先压缩重试，保留图片', '优化流式渲染，减少生成时的闪烁'] },
       { v: '4.2.1', d: '2026-11-17', items: ['新增「压缩图片」开关：关掉后按原图发送', '图片显示与上传使用真实格式（png / webp 不再被当成 jpeg）'] },
       { v: '4.2.0', d: '2026-11-17', items: ['流式生成时可以拖动查看思考内容，不再被刷新打断', '新增「应用图标」设置：可换成任意图片，启动页与 AI 默认头像同步', '修复关于页版本号显示不更新的问题'] },
       { v: '4.1.0', d: '2026-11-17', items: ['对话正文从 localStorage 迁到 IndexedDB，容量从 5MB 提升到数百 MB', '首次启动自动迁移旧数据，旧键会被清理', '设置仍留在 localStorage，体积很小'] },
@@ -2079,6 +2118,24 @@
       '</div>';
   }
 
+  function openArchivedConv(id) {
+    var c = findConv(id);
+    if (!c) return;
+    state.activeId = id;
+    state.archiveMode = true;
+    closeArchive();
+    renderMessages();
+    $('archiveBar').classList.add('show');
+    scrollBottom();
+  }
+  function exitArchiveMode() {
+    state.archiveMode = false;
+    state.activeId = null;
+    save(true);
+    renderMessages();
+    $('archiveBar').classList.remove('show');
+  }
+
   function openArchive() {
     renderArchive();
     $('archiveSheet').classList.add('open');
@@ -2097,12 +2154,20 @@
     list.forEach(function (c) {
       var d = document.createElement('div');
       d.className = 'architem';
+      d.setAttribute('data-open', c.id);
       d.innerHTML = '<div class="ai-main"><div class="ai-t">' + esc(c.title || '新对话') + '</div>' +
         '<div class="ai-s">' + (c.turns ? c.turns.length : 0) + ' 条提问</div></div>' +
         '<button data-restore="' + c.id + '">恢复</button>' +
         '<button class="del" data-adel="' + c.id + '">删除</button>';
       body.appendChild(d);
     });
+    var opens = body.querySelectorAll('[data-open]');
+    for (var oi = 0; oi < opens.length; oi++) {
+      opens[oi].addEventListener('click', function (e) {
+        if (e.target.closest('button')) return;
+        openArchivedConv(this.getAttribute('data-open'));
+      });
+    }
     var rs = body.querySelectorAll('[data-restore]');
     for (var i = 0; i < rs.length; i++) {
       rs[i].onclick = function () {
@@ -2727,6 +2792,8 @@
 
   function newChat() {
     if (state.streaming && state.abort) state.abort.abort();
+    state.archiveMode = false;
+    $('archiveBar').classList.remove('show');
     state.activeId = null;          // 空对话不落地，等第一条消息再创建
     save(true);
     renderMessages();
@@ -2815,6 +2882,7 @@
       batchAction(b.getAttribute('data-batch'));
     });
     $('btnArchive').onclick = openArchive;
+    $('btnExitArchive').onclick = exitArchiveMode;
     $('btnArchiveClose').onclick = closeArchive;
     $('btnUsageClear').onclick = function () {
       ask('清空用量记录', '只删除统计记录，不影响任何对话。', '清空', true, function () {
@@ -3098,7 +3166,7 @@
       var row = e.target.closest('.conv');
       if (row) {
         if (batchMode) { toggleSelect(row.dataset.cid); return; }
-        state.activeId = row.dataset.cid;
+        setActiveConv(row.dataset.cid);
         save(true);
         renderMessages();
         closeDrawer();
