@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '4.3.0';
+  var APP_VERSION = '4.3.1';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -2036,6 +2036,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.3.1', d: '2026-11-17', items: ['Pinch to zoom (1x–4x) and drag to pan in the image viewer', 'Double-tap to zoom in or reset'] },
         { v: '4.3.0', d: '2026-11-17', items: ['Archived chats can be opened and continued in a dedicated archive mode', 'Archived chats no longer appear in the normal list', 'Rejected images are retried compressed instead of being dropped', 'Streaming render optimised to reduce flicker'] },
         { v: '4.2.1', d: '2026-11-17', items: ['New "Compress images" switch: turn off to send originals', 'Images now keep their real format (png/webp no longer sent as jpeg)'] },
         { v: '4.2.0', d: '2026-11-17', items: ['Thinking output can be scrolled while streaming', 'New App icon setting: use any image for the start screen and default AI avatar', 'Version number in About now always reflects the build'] },
@@ -2059,6 +2060,7 @@
       return;
     }
     var logs = [
+      { v: '4.3.1', d: '2026-11-17', items: ['看图支持双指缩放（1–4 倍）与单指拖动查看细节', '双击放大 / 还原'] },
       { v: '4.3.0', d: '2026-11-17', items: ['归档对话可直接打开继续聊，进入独立的归档模式并带提示条', '归档对话不再出现在普通列表', '图片被接口拒绝时不再只发纯文本：先压缩重试，保留图片', '优化流式渲染，减少生成时的闪烁'] },
       { v: '4.2.1', d: '2026-11-17', items: ['新增「压缩图片」开关：关掉后按原图发送', '图片显示与上传使用真实格式（png / webp 不再被当成 jpeg）'] },
       { v: '4.2.0', d: '2026-11-17', items: ['流式生成时可以拖动查看思考内容，不再被刷新打断', '新增「应用图标」设置：可换成任意图片，启动页与 AI 默认头像同步', '修复关于页版本号显示不更新的问题'] },
@@ -2812,6 +2814,7 @@
     }).join('');
     track.scrollLeft = 0;
     $('lbCount').textContent = (idx + 1) + ' / ' + slides.length;
+    lbZoom.scale = 1; lbZoom.tx = 0; lbZoom.ty = 0;
     $('lightbox').classList.add('show');
     requestAnimationFrame(function () {
       track.scrollLeft = idx * track.clientWidth;
@@ -2823,7 +2826,88 @@
       $('lbCount').textContent = (i + 1) + ' / ' + slides.length;
     };
   }
+  var lbZoom = { scale: 1, tx: 0, ty: 0, baseScale: 1, baseDist: 0, baseMid: null, baseT: null, moved: false };
+
+  function lbImg() {
+    var track = $('lbTrack');
+    if (!track || !track.children.length) return null;
+    var idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    idx = Math.max(0, Math.min(track.children.length - 1, idx));
+    var slide = track.children[idx];
+    return slide ? slide.querySelector('img') : null;
+  }
+
+  function lbApply() {
+    var img = lbImg();
+    if (!img) return;
+    img.style.transformOrigin = 'center center';
+    img.style.transform = 'translate(' + lbZoom.tx + 'px,' + lbZoom.ty + 'px) scale(' + lbZoom.scale + ')';
+    $('lbTrack').style.overflowX = lbZoom.scale > 1.02 ? 'hidden' : 'auto';
+    $('lbTrack').style.touchAction = lbZoom.scale > 1.02 ? 'none' : 'pan-x';
+  }
+
+  function lbReset() {
+    lbZoom.scale = 1; lbZoom.tx = 0; lbZoom.ty = 0; lbZoom.baseDist = 0; lbZoom.baseMid = null;
+    var img = lbImg();
+    if (img) img.style.transform = '';
+    var track = $('lbTrack');
+    if (track) { track.style.overflowX = 'auto'; track.style.touchAction = 'pan-x'; }
+  }
+
+  function lbDist(t) {
+    var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  function lbMid(t) {
+    return { x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 };
+  }
+
+  function lbTouchStart(e) {
+    if (e.touches.length === 2) {
+      lbZoom.baseDist = lbDist(e.touches);
+      lbZoom.baseScale = lbZoom.scale;
+      lbZoom.baseMid = lbMid(e.touches);
+      lbZoom.baseT = { x: lbZoom.tx, y: lbZoom.ty };
+    } else if (e.touches.length === 1 && lbZoom.scale > 1.02) {
+      lbZoom.baseMid = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lbZoom.baseT = { x: lbZoom.tx, y: lbZoom.ty };
+    }
+  }
+
+  function lbTouchMove(e) {
+    if (e.touches.length === 2 && lbZoom.baseDist) {
+      e.preventDefault();
+      var d = lbDist(e.touches);
+      var sc = lbZoom.baseScale * (d / lbZoom.baseDist);
+      sc = Math.max(1, Math.min(4, sc));
+      var mid = lbMid(e.touches);
+      lbZoom.scale = sc;
+      lbZoom.tx = lbZoom.baseT.x + (mid.x - lbZoom.baseMid.x);
+      lbZoom.ty = lbZoom.baseT.y + (mid.y - lbZoom.baseMid.y);
+      if (sc <= 1.02) { lbZoom.tx = 0; lbZoom.ty = 0; }
+      lbApply();
+      return;
+    }
+    if (e.touches.length === 1 && lbZoom.scale > 1.02) {
+      e.preventDefault();
+      lbZoom.tx = lbZoom.baseT.x + (e.touches[0].clientX - lbZoom.baseMid.x);
+      lbZoom.ty = lbZoom.baseT.y + (e.touches[0].clientY - lbZoom.baseMid.y);
+      lbApply();
+    }
+  }
+
+  function lbTouchEnd() {
+    lbZoom.baseDist = 0;
+    if (lbZoom.scale <= 1.02) {
+      lbZoom.scale = 1;
+      lbZoom.tx = 0;
+      lbZoom.ty = 0;
+      lbApply();
+    }
+  }
+
   function closeLightbox() {
+    lbReset();
     $('lightbox').classList.remove('show');
     setTimeout(function () { $('lbTrack').innerHTML = ''; }, 200);
   }
@@ -3400,6 +3484,18 @@
       closeLightbox();
     };
     $('lbClose').onclick = closeLightbox;
+    (function () {
+      var box = $('lightbox');
+      box.addEventListener('touchstart', lbTouchStart, { passive: false });
+      box.addEventListener('touchmove', lbTouchMove, { passive: false });
+      box.addEventListener('touchend', lbTouchEnd);
+      box.addEventListener('touchcancel', lbTouchEnd);
+      box.addEventListener('dblclick', function () {
+        if (lbZoom.scale > 1.02) { lbZoom.scale = 1; lbZoom.tx = 0; lbZoom.ty = 0; }
+        else { lbZoom.scale = 2.5; }
+        lbApply();
+      });
+    })();
     $('qpanelClose').onclick = closeQPanel;
     $('qpanelList').addEventListener('click', function (e) {
       var item = e.target.closest('.qitem');
