@@ -47,7 +47,7 @@
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: PRESETS[0].text, think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
-        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false
+        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false, autoCompact: true
       },
       conversations: [], activeId: null
     };
@@ -132,7 +132,9 @@
     try {
       var o = JSON.parse(raw);
       state.settings = Object.assign(d.settings, o.settings || {});
-      state.conversations = (o.conversations || []).map(migrate);
+      state.conversations = (o.conversations || []).map(migrate).filter(function (c) {
+        return c.turns && c.turns.length;   // 不要留下 0 条提问的空壳
+      });
       state.activeId = null;   // 每次启动都是一张新对话
     } catch (e) {}
     if (!state.settings.bg) state.settings.bg = { kind: 'none' };
@@ -144,6 +146,7 @@
     try { if (!localStorage.getItem(LS)) save(true); } catch (e) {}
     if (!state.conversations.length) state.activeId = null;
     if (state.activeId && !findConv(state.activeId)) state.activeId = null;
+    save(true);   // 顺手把被清掉的空对话写回本地
   }
 
   var saveTimer = null;
@@ -1138,7 +1141,7 @@
     body.temperature = effTemperature(conv);
 
     var budget = requestBudget(conv);
-    if (tokensOfMessages(body.messages) > budget * 0.88) {
+    if (state.settings.autoCompact !== false && tokensOfMessages(body.messages) > budget * 0.88) {
       trimMessages(body.messages, budget);
       body.system = (body.system ? body.system + '\n\n' : '') + '（更早的对话因长度限制已省略。）';
       toast(tokensOfMessages(body.messages) > budget * 0.88 ? '内容仍然偏长，已尽量精简' : '已省略较早的对话以适配上下文');
@@ -1440,7 +1443,7 @@
     }
     var conv = ensureConv();
     var budget = requestBudget(conv);
-    if (tokensOfText(text) > budget * 0.85) {
+    if (state.settings.autoCompact !== false && tokensOfText(text) > budget * 0.85) {
       var keep = Math.floor(budget * 0.85 * 1.5);
       var cut = text.length - keep;
       text = text.slice(0, keep) + '\n\n…（内容过长，已自动截断 ' + cut + ' 字）';
@@ -1528,7 +1531,9 @@
 
   /* ---------- 抽屉 / 菜单 ---------- */
   function sortedConvs() {
-    return state.conversations.filter(function (c) { return !c.archived; }).sort(function (a, b) {
+    return state.conversations.filter(function (c) {
+      return !c.archived && ((c.turns && c.turns.length) || c.id === state.activeId);
+    }).sort(function (a, b) {
       if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
       return (b.updatedAt || 0) - (a.updatedAt || 0);
     });
@@ -1665,7 +1670,11 @@
     var si = $('convSearch');
     if (si) { si.value = ''; document.querySelector('.drawer-search').classList.remove('has'); }
     renderConvList(); $('drawer').classList.add('open'); $('scrim').classList.add('show'); }
-  function closeDrawer() { $('drawer').classList.remove('open'); $('scrim').classList.remove('show'); }
+  function closeDrawer() {
+    if (batchMode) setBatch(false);
+    $('drawer').classList.remove('open');
+    $('scrim').classList.remove('show');
+  }
   function openSheet() {
     fillSheet();
     $('sheet').classList.add('open');
@@ -2308,6 +2317,7 @@
     $('setSearch').checked = !!s.search;
     $('setHideUsage').checked = !!s.hideUsage;
     $('setDummy').checked = !!s.dummy;
+    $('setAutoCompact').checked = s.autoCompact !== false;
     $('archiveCount').textContent = String(archivedConvs().length);
     var gt = typeof s.temperature === 'number' ? s.temperature : 1;
     $('setTemp').value = String(Math.round(gt * 10));
@@ -2373,9 +2383,7 @@
 
   function newChat() {
     if (state.streaming && state.abort) state.abort.abort();
-    var c = { id: uid(), title: '新对话', createdAt: Date.now(), updatedAt: Date.now(), pinned: false, fav: false, turns: [] };
-    state.conversations.unshift(c);
-    state.activeId = c.id;
+    state.activeId = null;          // 空对话不落地，等第一条消息再创建
     save(true);
     renderMessages();
     $('input').value = '';
@@ -2464,6 +2472,10 @@
     });
     $('btnArchive').onclick = openArchive;
     $('btnArchiveClose').onclick = closeArchive;
+    $('setAutoCompact').onchange = function () {
+      state.settings.autoCompact = this.checked;
+      save(true);
+    };
     $('setDummy').onchange = function () {
       state.settings.dummy = this.checked;
       save(true);
@@ -2477,6 +2489,7 @@
     $('btnCloseDrawer').onclick = closeDrawer;
     $('scrim').onclick = function () {
       if ($('agreeSheet').classList.contains('open')) return;
+      if (batchMode) { setBatch(false); closeDrawer(); return; }
       closeDrawer(); closeSheet(); closeEdit(); closeMenu(); closeEffort(); closeCrop(); closeCtx(); closeConvSet();
     };
     $('btnSettings').onclick = function () { closeDrawer(); openSheet(); };
@@ -2950,6 +2963,7 @@
       if ($('lightbox').classList.contains('show')) { closeLightbox(); return true; }
       if ($('ctxSheet').classList.contains('open')) { closeCtx(); return true; }
       if ($('convSetSheet').classList.contains('open')) { closeConvSet(); return true; }
+      if (batchMode && $('drawer').classList.contains('open')) { setBatch(false); return true; }
       if (qpanelOpen) { closeQPanel(); return true; }
       if ($('dlgScrim').classList.contains('show')) { closeAsk(); return true; }
       if ($('cropSheet').classList.contains('open')) { closeCrop(); return true; }
