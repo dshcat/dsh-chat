@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '4.3.1';
+  var APP_VERSION = '4.3.2';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
@@ -191,8 +191,23 @@
     });
   }
 
+  function fixImageMedia(c) {
+    (c.turns || []).forEach(function (t) {
+      (t.questions || []).forEach(function (q) {
+        (q.files || []).forEach(function (f) {
+          if (f.kind !== 'image' || !f.data) return;
+          if (f.data.indexOf('/9j/') === 0) f.media = 'image/jpeg';
+          else if (f.data.indexOf('iVBOR') === 0) f.media = 'image/png';
+          else if (f.data.indexOf('UklGR') === 0) f.media = 'image/webp';
+          else if (f.data.indexOf('R0lGOD') === 0) f.media = 'image/gif';
+        });
+      });
+    });
+    return c;
+  }
+
   function cleanConvs(list) {
-    return (list || []).map(migrate).filter(function (c) { return c.turns && c.turns.length; });
+    return (list || []).map(migrate).map(fixImageMedia).filter(function (c) { return c.turns && c.turns.length; });
   }
 
   function loadData() {
@@ -439,7 +454,17 @@
     '编辑这条提问': 'Edit this question', '取消': 'Cancel', '保存并生成': 'Save & regenerate',
     '推理等级': 'Reasoning level', '对话设置': 'Chat settings', '上下文用量': 'Context usage',
     '归档箱': 'Archive', '更新公告': 'Changelog', '用户须知': 'About',
-    '批量': 'Select', '完成': 'Done', '收藏': 'Star', '归档': 'Archive', '删除': 'Delete'
+    '批量': 'Select', '完成': 'Done', '收藏': 'Star', '归档': 'Archive', '删除': 'Delete',
+    '压缩图片': 'Compress images',
+    '开启后缩到 1024px 再发；关闭则原图发送，更清晰但更占流量与空间': 'On: resize to 1024px. Off: send originals — sharper but heavier.',
+    '应用图标': 'App icon',
+    'App 内图标': 'In-app icon',
+    '改的是 App 里的图标（启动页、AI 默认头像）；桌面图标由系统决定，改不了。': 'Changes the in-app icon (start screen, default AI avatar). The launcher icon is controlled by the system.',
+    '点圆框换头像，会先让你选裁剪区域。': 'Tap a circle to change the avatar; you can crop first.',
+    '归档对话': 'Archived chat', '退出归档': 'Exit archive',
+    '归档箱': 'Archive', '批量管理': 'Batch',
+    '只删除统计记录，不影响任何对话。': 'Only deletes stats. Chats are untouched.',
+    '恢复默认': 'Restore default', '用户': 'User', 'AI': 'AI'
 
   };
 
@@ -1640,6 +1665,7 @@
         resizeImage(file, function (b64) {
           if (!b64) { dropItem(box, item); draw(); toast('图片读取失败'); return; }
           item.data = b64;
+          item.media = 'image/jpeg';   // 画布输出的是 jpeg，媒体类型必须跟着改
           item.uploading = false;
           draw();
         });
@@ -2036,6 +2062,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.3.2', d: '2026-11-17', items: ['Fixed compressed images being sent as PNG, which caused "unsupported image" errors', 'Repairs media type of images already in history', 'More English: compress images, app icon, archive banner'] },
         { v: '4.3.1', d: '2026-11-17', items: ['Pinch to zoom (1x–4x) and drag to pan in the image viewer', 'Double-tap to zoom in or reset'] },
         { v: '4.3.0', d: '2026-11-17', items: ['Archived chats can be opened and continued in a dedicated archive mode', 'Archived chats no longer appear in the normal list', 'Rejected images are retried compressed instead of being dropped', 'Streaming render optimised to reduce flicker'] },
         { v: '4.2.1', d: '2026-11-17', items: ['New "Compress images" switch: turn off to send originals', 'Images now keep their real format (png/webp no longer sent as jpeg)'] },
@@ -2060,6 +2087,7 @@
       return;
     }
     var logs = [
+      { v: '4.3.2', d: '2026-11-17', items: ['修复压缩后的图片被当成 png 发送、导致「unsupported image」报错', '自动修正历史消息里图片的格式标记', '补齐英文：压缩图片、应用图标、归档提示等'] },
       { v: '4.3.1', d: '2026-11-17', items: ['看图支持双指缩放（1–4 倍）与单指拖动查看细节', '双击放大 / 还原'] },
       { v: '4.3.0', d: '2026-11-17', items: ['归档对话可直接打开继续聊，进入独立的归档模式并带提示条', '归档对话不再出现在普通列表', '图片被接口拒绝时不再只发纯文本：先压缩重试，保留图片', '优化流式渲染，减少生成时的闪烁'] },
       { v: '4.2.1', d: '2026-11-17', items: ['新增「压缩图片」开关：关掉后按原图发送', '图片显示与上传使用真实格式（png / webp 不再被当成 jpeg）'] },
