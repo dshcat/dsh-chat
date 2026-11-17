@@ -29,7 +29,7 @@
     <div id="messages"></div>
     <div id="empty" class="empty">
       <div class="logo">
-        <img src="whale.png" alt="">
+        <img src="whale.png" id="emptyLogo" alt="">
       </div>
       <h1>晚上好</h1>
       <p class="hint" id="emptyHint">先到设置里填上 API Key，然后随便聊。</p>
@@ -192,6 +192,17 @@
         <button class="mini" id="btnAvatarReset">恢复默认</button>
       </div>
       <span class="note">点圆框换头像，会先让你选裁剪区域。</span>
+    </div>
+
+    <div class="field">
+      <span class="label">应用图标</span>
+      <div class="avatarrow">
+        <button class="avatarpick" id="pickLogo">
+          <span class="avp" id="avLogo"></span><span class="avlabel">App 内图标</span>
+        </button>
+        <button class="mini" id="btnLogoReset">恢复默认</button>
+      </div>
+      <span class="note">改的是 App 里的图标（启动页、AI 默认头像）；桌面图标由系统决定，改不了。</span>
     </div>
 
     <div class="group">模型</div>

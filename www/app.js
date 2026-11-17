@@ -48,7 +48,7 @@
         apiKey: '', model: 'deepseek-flash', base: 'https://api.deepseek.com',
         system: '', think: true, search: true, effort: 'high', temperature: 1,
         theme: 'auto', bg: { kind: 'none', veil: 0.8 }, usageByDay: {},
-        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false, autoCompact: true
+        avatar: { user: '', ai: '' }, agreed: false, lang: 'zh-Hans', hideUsage: false, dummy: false, autoCompact: true, logo: ''
       },
       conversations: [], activeId: null
     };
@@ -800,7 +800,7 @@
     var av = effAvatar(activeConv());
     var avHtml;
     if (av.ai) avHtml = '<div class="avatar" style="background-image:url(' + av.ai + ')"></div>';
-    else avHtml = '<div class="avatar def">' + (ai.streaming && !ai.text ? '<div class="spinner"></div>' : '<img src="whale.png" alt="">') + '</div>';
+    else avHtml = '<div class="avatar def">' + (ai.streaming && !ai.text ? '<div class="spinner"></div>' : '<img src="' + appLogo() + '" alt="">') + '</div>';
 
     var h = '';
     h += '<div class="ai-head">' + avHtml + '<span>' +
@@ -1307,7 +1307,12 @@
 
     function paint() {
       if (!node) return;
+      if (state.thinkHold) return;   // 用户正在拖动思考内容时不重绘
+      var prev = node.querySelector('.thinkbody');
+      var st = prev ? prev.scrollTop : 0;
       node.innerHTML = '<div class="body">' + aiInner(turn) + '</div>';
+      var now = node.querySelector('.thinkbody');
+      if (now && st) now.scrollTop = st;
     }
     var raf = 0;
     function paintSoon() {
@@ -1978,6 +1983,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '4.2.0', d: '2026-11-17', items: ['Thinking output can be scrolled while streaming', 'New App icon setting: use any image for the start screen and default AI avatar', 'Version number in About now always reflects the build'] },
         { v: '4.1.0', d: '2026-11-17', items: ['Chat data moved from localStorage to IndexedDB: from 5MB to hundreds of MB', 'Existing data is migrated automatically on first launch', 'Settings stay in localStorage (tiny)'] },
         { v: '4.0.1', d: '2026-11-17', items: ['Fixed the repeated "storage full" toast when switching chats: now shown once with an accurate message', 'Image compression lowered from 1400px to 1024px to save local space', 'Changelog now covers every change since 3.10.0'] },
         { v: '4.0.0', d: '2026-11-17', items: ['New illustrated app icon', 'English gaps fixed: New chat, greetings, empty state, usage line', 'First public release'] },
@@ -1998,6 +2004,7 @@
       return;
     }
     var logs = [
+      { v: '4.2.0', d: '2026-11-17', items: ['流式生成时可以拖动查看思考内容，不再被刷新打断', '新增「应用图标」设置：可换成任意图片，启动页与 AI 默认头像同步', '修复关于页版本号显示不更新的问题'] },
       { v: '4.1.0', d: '2026-11-17', items: ['对话正文从 localStorage 迁到 IndexedDB，容量从 5MB 提升到数百 MB', '首次启动自动迁移旧数据，旧键会被清理', '设置仍留在 localStorage，体积很小'] },
       { v: '4.0.1', d: '2026-11-17', items: ['修复切换对话时反复弹出的「本地空间满了」提示：改为只提示一次，并说明准确原因', '图片压缩从 1400px 降到 1024px，减少本地占用', '更新公告补齐 3.10.0 以后的全部改动'] },
       { v: '4.0.0', d: '2026-11-17', items: ['全新封面图标（插画风）', '补齐英文：新对话、问候语、空状态、用量统计行', '作为首个公开版本发布'] },
@@ -2246,6 +2253,30 @@
     if (cb) cb(data);
   }
 
+  function appLogo() {
+    return state.settings.logo || 'whale.png';
+  }
+
+  function renderAppLogo() {
+    var src = appLogo();
+    var el = $('emptyLogo');
+    if (el) el.src = src;
+    var prev = $('avLogo');
+    if (prev) {
+      if (state.settings.logo) {
+        prev.style.backgroundImage = 'url(' + state.settings.logo + ')';
+        prev.innerHTML = '';
+      } else {
+        prev.style.backgroundImage = '';
+        prev.innerHTML = '<img src="whale.png" alt="" style="width:74%;height:74%;object-fit:contain">';
+      }
+    }
+    var av = $('csAvAi');
+    if (av && !effAvatar(activeConv()).ai) {
+      av.innerHTML = '<img src="' + src + '" alt="" style="width:70%;height:70%;object-fit:contain">';
+    }
+  }
+
   function renderAvatarSettings() {
     var a = state.settings.avatar || { user: '', ai: '' };
     var u = $('avUser'), i = $('avAi');
@@ -2255,7 +2286,7 @@
     }
     if (i) {
       i.style.backgroundImage = a.ai ? 'url(' + a.ai + ')' : '';
-      i.innerHTML = a.ai ? '' : '<img src="whale.png" alt="" style="width:70%;height:70%;object-fit:contain">';
+      i.innerHTML = a.ai ? '' : '<img src="' + appLogo() + '" alt="" style="width:70%;height:70%;object-fit:contain">';
     }
   }
 
@@ -2617,6 +2648,7 @@
     renderSwatches();
     renderModelCards();
     renderAvatarSettings();
+    renderAppLogo();
     renderUsageList();
     translateTree($('sheet'));
 
@@ -2981,6 +3013,15 @@
       }, true);
     })();
 
+    var holdOff = function () { state.thinkHold = 0; };
+    $('messages').addEventListener('pointerdown', function (e) {
+      if (e.target.closest('.thinkbody')) state.thinkHold = 1;
+    });
+    $('messages').addEventListener('pointerup', holdOff);
+    $('messages').addEventListener('pointercancel', holdOff);
+    document.addEventListener('touchend', holdOff);
+    document.addEventListener('mouseup', holdOff);
+
     $('messages').addEventListener('click', function (e) {
       var img = e.target.closest('img[data-full]');
       if (img) {
@@ -3127,7 +3168,12 @@
       var fr = new FileReader();
       fr.onload = function () {
         openCrop(String(fr.result), 1, function (data) {
-          if (cropTarget === 'user' || cropTarget === 'ai') {
+          if (cropTarget === 'logo') {
+            state.settings.logo = data;
+            renderAppLogo();
+            renderMessages();
+            toast('应用图标已更新');
+          } else if (cropTarget === 'user' || cropTarget === 'ai') {
             state.settings.avatar = state.settings.avatar || { user: '', ai: '' };
             state.settings.avatar[cropTarget] = data;
             renderAvatarSettings();
@@ -3142,6 +3188,14 @@
         });
       };
       fr.readAsDataURL(f);
+    };
+    $('pickLogo').onclick = function () { cropTarget = 'logo'; $('cropFile').click(); };
+    $('btnLogoReset').onclick = function () {
+      state.settings.logo = '';
+      save(true);
+      renderAppLogo();
+      renderMessages();
+      toast('已恢复默认图标');
     };
     $('btnAvatarReset').onclick = function () {
       state.settings.avatar = { user: '', ai: '' };
@@ -3309,6 +3363,7 @@
     applyTheme();
     applyPrivacy();
     applyLang();
+    renderAppLogo();
     renderMessages();
     updateHeader();
     if (!state.settings.agreed) showAgree();
