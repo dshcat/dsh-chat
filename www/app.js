@@ -5,7 +5,7 @@
 
   var LS = 'deepchat.v5';
   var LS_OLD = ['deepchat.v4', 'deepchat.v3', 'deepchat.v2', 'deepchat.v1'];
-  var APP_VERSION = '3.6.4';
+  var APP_VERSION = '4.2.0';
   var API_PATH = '/anthropic/v1/messages';
   var MAX_TOKENS = 65536;
 
