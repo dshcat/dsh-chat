@@ -217,19 +217,32 @@
     if (n < 0.0001) return '<¥0.0001';
     return '¥' + n.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   }
-  function toast(msg) {
+  function toast(msg, en, dur) {
     var t = $('toast');
-    t.textContent = msg; t.classList.add('show');
+    var lang = state.settings.lang || 'zh-Hans';
+    var sub = '';
+    if (lang === 'en') {
+      var e = en || enFor(msg);
+      if (e && e !== msg) sub = '<span class="toast-en">' + esc(e) + '</span>';
+    }
+    t.innerHTML = '<span class="toast-zh">' + esc(msg) + '</span>' + sub;
+    t.classList.add('show');
     clearTimeout(t._h);
-    t._h = setTimeout(function () { t.classList.remove('show'); }, 1900);
+    t._h = setTimeout(function () { t.classList.remove('show'); }, dur || 2600);
   }
   function haptic() { if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} } }
 
   /* ---------- 确认框 ---------- */
   var dlgCb = null;
   function ask(title, msg, okText, danger, cb) {
+    var lang = state.settings.lang || 'zh-Hans';
     $('dlgTitle').textContent = title;
-    $('dlgMsg').textContent = msg || '';
+    var sub = '';
+    if (lang === 'en') {
+      var e = enFor(msg);
+      if (e) sub = '<span class="dlg-en">' + esc(e) + '</span>';
+    }
+    $('dlgMsg').innerHTML = esc(msg || '') + sub;
     var ok = $('dlgOk');
     ok.textContent = okText || '确定';
     ok.classList.toggle('danger', !!danger);
@@ -327,6 +340,11 @@
     '命中': 'Hit', '未命中': 'Miss', '输出': 'Output', '思考': 'Thinking', '次': 'runs',
     '合计': 'Total', '旧记录无拆分': 'no breakdown for old records',
     '今天': 'Today', '昨天': 'Yesterday',
+    '已清空用量记录': 'Usage log cleared', '已清空': 'Cleared', '已删除': 'Deleted',
+    '已恢复': 'Restored', '已复制': 'Copied', '已取消收藏': 'Starred removed',
+    '先选几条对话': 'Select some chats first', '已恢复默认头像': 'Default avatar restored',
+    '已跟随全局头像': 'Using global avatars', '已跟随全局背景': 'Using global wallpaper',
+    '只删除统计记录，不影响任何对话。': 'Only deletes stats. Chats are untouched.',
     '还没有用量记录': 'No usage yet', '没有匹配的日期': 'No matching date',
     '编辑这条提问': 'Edit this question', '取消': 'Cancel', '保存并生成': 'Save & regenerate',
     '推理等级': 'Reasoning level', '对话设置': 'Chat settings', '上下文用量': 'Context usage',
@@ -334,6 +352,21 @@
     '批量': 'Select', '完成': 'Done', '收藏': 'Star', '归档': 'Archive', '删除': 'Delete'
 
   };
+
+  function enFor(msg) {
+    if (!msg) return '';
+    if (EN[msg]) return EN[msg];
+    var m;
+    if ((m = msg.match(/^已收藏 (\d+) 条$/))) return 'Starred ' + m[1];
+    if ((m = msg.match(/^已归档 (\d+) 条$/))) return 'Archived ' + m[1];
+    if ((m = msg.match(/^删除 (\d+) 条对话$/))) return 'Delete ' + m[1] + ' chats';
+    if (msg.indexOf('已省略较早的对话') >= 0) return 'Older turns omitted to fit context';
+    if (msg.indexOf('已截断') >= 0) return 'Cut to fit the limit';
+    if (msg.indexOf('已复制') === 0) return 'Copied';
+    if (msg.indexOf('已删除') === 0) return 'Deleted';
+    if (msg.indexOf('已恢复') === 0) return 'Restored';
+    return '';
+  }
 
   function T(str) {
     var lang = state.settings.lang || 'zh-Hans';
@@ -1207,7 +1240,7 @@
     if (state.settings.autoCompact !== false && tokensOfMessages(body.messages) > budget * 0.88) {
       trimMessages(body.messages, budget);
       body.system = (body.system ? body.system + '\n\n' : '') + '（更早的对话因长度限制已省略。）';
-      toast(tokensOfMessages(body.messages) > budget * 0.88 ? '内容仍然偏长，已尽量精简' : '已省略较早的对话以适配上下文');
+      toast(tokensOfMessages(body.messages) > budget * 0.88 ? '内容仍然偏长，已尽量精简' : '已省略较早的对话以适配上下文', 'Context trimmed to fit', 4600);
     }
     if (s.search) body.tools = [
       { type: 'deepseek_web_search', name: 'deepseek_web_search' },
@@ -1515,7 +1548,7 @@
       var keep = Math.floor(budget * 0.85 * 1.5);
       var cut = text.length - keep;
       text = text.slice(0, keep) + '\n\n…（内容过长，已自动截断 ' + cut + ' 字）';
-      toast('这条太长，已截断到上限内发送');
+      toast('这条太长，已截断到上限内发送', 'Message truncated to fit the limit', 4600);
     }
     var q0 = makeQuestion(text);
     q0.files = pending.filter(function (f) { return f.kind === 'image' ? !!f.data : f.kind === 'text' ? !!f.text : !!f.fileId; });
@@ -1855,6 +1888,7 @@
     if (!box || box.innerHTML) return;
     if ((state.settings.lang || 'zh-Hans') === 'en') {
       var en = [
+        { v: '3.10.1', d: '2026-11-17', items: ['Toasts stay visible 2.6s, important ones 4.6s', 'Toasts and dialogs show an English sub-line in English mode'] },
         { v: '3.10.0', d: '2026-11-17', items: ['Usage log keeps 30 days, fixed-height scroll area, searchable', 'Old records without breakdown still show total tokens', 'Full English UI, including notices and changelog'] },
         { v: '3.9.0', d: '2026-11-17', items: ['System prompt is empty by default', 'Removed starter suggestion cards', 'Usage replaced by a searchable daily ledger', 'Back button no longer exits the app from a sheet'] },
         { v: '3.8.x', d: '2026-11-17', items: ['Batch star / archive / delete', 'Archive box in settings', 'Attachment limit raised to 20', 'Changelog and user notice', 'Daily spending limit tip'] },
@@ -1871,6 +1905,7 @@
       return;
     }
     var logs = [
+      { v: '3.10.1', d: '2026-11-17', items: ['提示停留时间延长到 2.6 秒，重要提示 4.6 秒', '英文模式下提示与确认框附带英文小字'] },
       { v: '3.10.0', d: '2026-11-17', items: ['用量只保留 30 天，固定高度区域内滑动与搜索', '旧记录没有拆分时改为显示总 token 数', '英文界面补全，包含用户须知与更新公告'] },
       { v: '3.9.0', d: '2026-11-17', items: ['提示词默认留空，不再自动填预设', '开篇去掉三条示例问题', '用量改为可按日期搜索的明细列表（命中/未命中/输出/思考/金额）', '修复部分面板按返回键直接退出 App 的问题'] },
       { v: '3.8.2', d: '2026-11-17', items: ['单个对话的 ⋯ 菜单支持归档'] },
