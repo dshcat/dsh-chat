@@ -220,10 +220,8 @@
     return idbGet().then(function (rec) {
       if (rec && Array.isArray(rec.conversations)) {
         state.conversations = cleanConvs(rec.conversations);
-        // 如果设置没存进 localStorage（之前空间不够），从索引库恢复
-        var hasLs = false;
-        try { hasLs = !!localStorage.getItem(LS_SET); } catch (e) {}
-        if (!hasLs && rec.settings) {
+        // 设置以索引库为准：localStorage 只有 5MB，写失败过就再也不会更新
+        if (rec.settings) {
           state.settings = Object.assign(defaults().settings, rec.settings);
           normalizeSettings();
           state.settingsRestored = true;
@@ -3478,8 +3476,8 @@
       save(true); applyBg(); renderSwatches(); toast('背景已清除');
     };
 
-    $('setKey').oninput = function () { state.settings.apiKey = this.value.trim(); save(); };
-    $('setSystem').oninput = function () { state.settings.system = this.value; save(); renderPresets(); };
+    $('setKey').oninput = function () { state.settings.apiKey = this.value.trim(); save(true); };
+    $('setSystem').oninput = function () { state.settings.system = this.value; save(true); };
     $('setThink').onchange = function () { state.settings.think = this.checked; save(); updateHeader(); };
     $('setSearch').onchange = function () { state.settings.search = this.checked; save(); updateHeader(); };
     $('btnEye').onclick = function () {
@@ -3596,6 +3594,10 @@
     };
 
     window.addEventListener('beforeunload', function () { save(true); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') save(true);
+    });
+    window.addEventListener('pagehide', function () { save(true); });
 
     try {
       window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function () {
