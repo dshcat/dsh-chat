@@ -32,7 +32,8 @@
     edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>',
     pin: '<svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 4 4H6l4-4-1-6z"/><path d="M12 14v6"/></svg>',
     star: '<svg viewBox="0 0 24 24"><path d="M12 4l2.4 5.2 5.6.6-4.2 3.8 1.2 5.4L12 16.2 6.9 19l1.2-5.4L4 9.8l5.6-.6z"/></svg>',
-    trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>'
+    trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>',
+    archive: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>'
   };
 
   var AV_LOGO = '<svg viewBox="0 0 48 48"><path d="M10 12h28a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H24l-8 7v-7h-6a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z"/></svg>';
@@ -1883,6 +1884,12 @@
     });
     item(ICON.star, c.fav ? '取消收藏' : '收藏对话', '', false, function () {
       c.fav = !c.fav; save(true); renderConvList(); closeMenu(); toast(c.fav ? '已收藏，需先取消收藏才能删除' : '已取消收藏');
+    });
+    item(ICON.archive, '归档对话', '', false, function () {
+      c.archived = true;
+      if (state.activeId === c.id) state.activeId = null;
+      save(true); renderMessages(); renderConvList(); closeMenu();
+      toast('已归档，可在设置 → 归档箱找回');
     });
 
     var sep = document.createElement('div'); sep.className = 'menu-sep'; body.appendChild(sep);
