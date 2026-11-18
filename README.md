@@ -75,7 +75,7 @@
 
 ## 安装
 
-1. 下载 `DSChat-5.0.0.apk`
+1. 下载 `DSChat-5.0.0.apk`（[Releases](https://github.com/dshcat/dsh-chat/releases) 页，或镜像 [AtomGit](https://atomgit.com/SCHDGZS/dsh-chat/releases)）
 2. 点开安装，允许一次「未知来源」
 3. 打开 → 左上角 ☰ → 设置 → 填 API Key（platform.deepseek.com 申请）
 
